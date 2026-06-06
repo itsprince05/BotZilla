@@ -491,7 +491,6 @@ async def process_drm(client: Client, message: Message, state: dict):
         await message.reply_audio(
             audio=fixed_file,
             duration=audio_duration,
-            file_name=f"{output_name}.m4a",
             caption=f"<b>{output_name}.m4a</b> ({decrypted_size} MB) | {quality}",
         )
 
