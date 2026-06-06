@@ -12,62 +12,91 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BotZilla Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0f172a; color: #f8fafc; padding: 2rem; margin: 0; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .card { background: #1e293b; border-radius: 12px; padding: 2rem; margin-bottom: 2rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); border: 1px solid #334155; }
-        h1, h2 { color: #38bdf8; margin-top: 0; }
-        .form-group { margin-bottom: 1rem; }
-        label { display: block; margin-bottom: 0.5rem; font-weight: 500; color: #cbd5e1; }
-        input, textarea { width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc; font-family: monospace; box-sizing: border-box; }
-        input:focus, textarea:focus { outline: none; border-color: #38bdf8; }
-        button { background: #0ea5e9; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 6px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-        button:hover { background: #0284c7; }
-        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-        th, td { padding: 1rem; text-align: left; border-bottom: 1px solid #334155; }
-        th { color: #94a3b8; font-weight: 500; }
-        .key-text { font-family: monospace; color: #10b981; word-break: break-all; }
-        .delete-btn { background: #ef4444; padding: 0.5rem 1rem; }
-        .delete-btn:hover { background: #dc2626; }
+        body { 
+            font-family: 'Outfit', sans-serif; 
+            background-color: #f0f2f5; 
+            margin: 0; padding: 0; 
+            color: #1c1e21; 
+            -webkit-user-select: none; user-select: none;
+        }
+        .action-bar { 
+            position: sticky; top: 0; z-index: 100; box-sizing: border-box; height: 48px;
+            background: #2481cc; color: white; padding: 0 10px; gap: 10px;
+            display: flex; align-items: center;
+        }
+        .navbar-icon { width: 32px; height: 32px; border-radius: 50%; margin-right: 12px; display: flex; align-items: center; justify-content: center; background: white; color: #2481cc; }
+        .navbar-title { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
+        
+        .container { max-width: 800px; margin: 0 auto; padding: 15px; }
+        
+        .card { 
+            background: #ffffff; border-radius: 10px; padding: 15px; border: 1px solid #e0e0e0; 
+            margin-bottom: 15px; display: flex; flex-direction: column; gap: 10px;
+        }
+        .card h3 { margin-top: 0; font-size: 16px; color: #1c1e21; margin-bottom: 5px; }
+        
+        input, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-family: inherit; font-size: 14px; outline: none; }
+        input:focus, textarea:focus { border-color: #2481cc; }
+        
+        .primary-btn { width: 100%; padding: 12px; background: #2481cc; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
+        .primary-btn:hover { background: #1e6eb0; }
+        
+        .item-list { display: flex; flex-direction: column; gap: 10px; }
+        .show-card { background: #ffffff; border-radius: 10px; padding: 15px; border: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; }
+        .show-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
+        .show-id { font-size: 13px; color: #666; margin-top: 5px; }
+        .show-keys { font-size: 12px; color: #2481cc; font-family: monospace; background: #eef5fb; padding: 8px; border-radius: 6px; margin-top: 8px; word-break: break-all; }
+        
+        .delete-btn { display: flex; justify-content: center; align-items: center; cursor: pointer; width: 36px; height: 36px; border-radius: 50%; background: #fff5f5; color: #fa5252; flex-shrink: 0; margin-left: 10px; }
+        
+        /* DELETE POPUP */
+        #delete-popup { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; }
+        .popup-box { background:#fff; padding:20px; border-radius:12px; width:calc(100% - 40px); max-width:320px; box-sizing:border-box; }
+        .popup-box h3 { margin-top:0; color:#1c1e21; }
+        .popup-box p { font-size:14px; color:#666; margin-bottom:15px; }
+        .popup-btns { display:flex; gap:10px; }
+        .popup-btns button { flex:1; padding:12px 15px; border:none; border-radius:10px; cursor:pointer; font-family:inherit; font-weight:600; font-size:15px; }
+        .cancel-btn { background:#f0f2f5; color:#333; }
+        .confirm-btn { background:#fa5252; color:#fff; }
     </style>
 </head>
 <body>
+    <div class="action-bar">
+        <div class="navbar-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 9-5-9-5-9 5 9 5z"/><path d="m12 14-9-5 9-5 9 5-9 5z"/><path d="m12 14 9-5-9-5-9 5 9 5z"/><path d="m12 21 9-5-9-5-9 5 9 5z"/><path d="m12 21-9-5 9-5 9 5-9 5z"/></svg>
+        </div>
+        <div class="navbar-title">BotZilla DRM Dashboard</div>
+    </div>
+    
     <div class="container">
+        <!-- ADD SHOW FORM -->
         <div class="card">
-            <h1>BotZilla DRM Dashboard</h1>
-            <p style="color: #94a3b8; margin-bottom: 2rem;">Save decryption keys for shows here. The bot will automatically use them when downloading.</p>
-            
-            <form id="addShowForm">
-                <div class="form-group">
-                    <label>Show Name</label>
-                    <input type="text" id="showName" required placeholder="e.g. Super Yoddha Season 1">
-                </div>
-                <div class="form-group">
-                    <label>Show ID (Optional, for reference)</label>
-                    <input type="text" id="showId" placeholder="e.g. 12345">
-                </div>
-                <div class="form-group">
-                    <label>Decryption Keys (kid:key format)</label>
-                    <textarea id="decryptionKey" rows="4" required placeholder="kid1:key1&#10;kid2:key2"></textarea>
-                </div>
-                <button type="submit">Add / Update Show</button>
+            <h3>Add New Show</h3>
+            <form id="addShowForm" style="display: flex; flex-direction: column; gap: 10px;">
+                <input type="text" id="showName" required placeholder="Show Name (e.g. Super Yoddha S1)">
+                <input type="text" id="showId" placeholder="Show ID (Optional)">
+                <textarea id="decryptionKey" rows="3" required placeholder="kid:key (one per line)"></textarea>
+                <button type="submit" class="primary-btn">Save Show Keys</button>
             </form>
         </div>
 
-        <div class="card">
-            <h2>Saved Shows</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Show Name</th>
-                        <th>Keys</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody id="showsTable">
-                    <!-- Shows will be populated here -->
-                </tbody>
-            </table>
+        <!-- SAVED SHOWS -->
+        <div class="item-list" id="showsTable">
+            <!-- Shows will be populated here -->
+        </div>
+    </div>
+
+    <!-- DELETE POPUP -->
+    <div id="delete-popup">
+        <div class="popup-box">
+            <h3>Confirm Delete</h3>
+            <p>Are you sure you want to delete this show?</p>
+            <div class="popup-btns">
+                <button class="cancel-btn" onclick="hideDeletePopup()">Cancel</button>
+                <button id="delete-btn-submit" class="confirm-btn" onclick="confirmDelete()">Delete</button>
+            </div>
         </div>
     </div>
 
@@ -76,42 +105,49 @@ HTML_TEMPLATE = """
             fetch('/api/shows')
                 .then(r => r.json())
                 .then(shows => {
-                    const tbody = document.getElementById('showsTable');
-                    tbody.innerHTML = '';
+                    const container = document.getElementById('showsTable');
+                    container.innerHTML = '';
                     Object.entries(shows).forEach(([name, data]) => {
-                        const tr = document.createElement('tr');
-                        
                         let keysHtml = '';
                         if (typeof data.keys === 'object') {
-                            keysHtml = Object.entries(data.keys).map(([kid, key]) => `<div>${kid}:${key}</div>`).join('');
+                            keysHtml = Object.entries(data.keys).map(([kid, key]) => `${kid}:${key}`).join('<br>');
                         } else {
                             keysHtml = String(data.keys);
                         }
                         
-                        tr.innerHTML = `
-                            <td>
-                                <strong>${name}</strong>
-                                <div style="color: #64748b; font-size: 0.875rem; margin-top: 0.25rem;">ID: ${data.id || 'N/A'}</div>
-                            </td>
-                            <td class="key-text">${keysHtml}</td>
-                            <td><button class="delete-btn" onclick="deleteShow('${name}')">Delete</button></td>
+                        container.innerHTML += `
+                            <div class="show-card">
+                                <div style="flex: 1; overflow: hidden;">
+                                    <div class="show-title">${name}</div>
+                                    <div class="show-id">ID: ${data.id || 'N/A'}</div>
+                                    <div class="show-keys">${keysHtml}</div>
+                                </div>
+                                <div class="delete-btn" onclick="showDeletePopup('${name}')">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                </div>
+                            </div>
                         `;
-                        tbody.appendChild(tr);
                     });
                 });
         }
 
         document.getElementById('addShowForm').addEventListener('submit', (e) => {
             e.preventDefault();
+            const btn = e.target.querySelector('button');
             const name = document.getElementById('showName').value;
             const id = document.getElementById('showId').value;
             const keysText = document.getElementById('decryptionKey').value;
+            
+            btn.disabled = true;
+            btn.textContent = "Saving...";
             
             fetch('/api/shows', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ name, id, keys_text: keysText })
             }).then(r => r.json()).then(res => {
+                btn.disabled = false;
+                btn.textContent = "Save Show Keys";
                 if(res.success) {
                     document.getElementById('addShowForm').reset();
                     loadShows();
@@ -121,11 +157,24 @@ HTML_TEMPLATE = """
             });
         });
 
-        function deleteShow(name) {
-            if(confirm('Delete ' + name + '?')) {
-                fetch('/api/shows/' + encodeURIComponent(name), { method: 'DELETE' })
-                    .then(() => loadShows());
-            }
+        let itemToDelete = null;
+        function showDeletePopup(name) {
+            itemToDelete = name;
+            document.getElementById('delete-popup').style.display = 'flex';
+        }
+
+        function hideDeletePopup() {
+            document.getElementById('delete-popup').style.display = 'none';
+            itemToDelete = null;
+        }
+
+        function confirmDelete() {
+            if(!itemToDelete) return;
+            fetch('/api/shows/' + encodeURIComponent(itemToDelete), { method: 'DELETE' })
+                .then(() => {
+                    hideDeletePopup();
+                    loadShows();
+                });
         }
 
         loadShows();
