@@ -30,7 +30,6 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 OWNER_IDS = [int(x.strip()) for x in os.getenv("OWNER_IDS", "").split(",") if x.strip()]
 _MP4DECRYPT_BIN = "mp4decrypt.exe" if os.name == "nt" else "mp4decrypt"
 MP4DECRYPT_PATH = os.getenv("MP4DECRYPT_PATH", os.path.join(os.path.dirname(__file__), _MP4DECRYPT_BIN))
-FFMPEG_PATH = os.getenv("FFMPEG_PATH", "ffmpeg")
 DEFAULT_QUALITY = os.getenv("DEFAULT_QUALITY", "64k")
 ALLOWED_CHATS = [int(x.strip()) for x in os.getenv("ALLOWED_CHATS", "").split(",") if x.strip()]
 
@@ -207,34 +206,16 @@ async def run_decrypt(mp4decrypt_path: str, keys: dict, input_file: str, output_
         return False, str(e)
 
 
-async def run_ffmpeg_convert(ffmpeg_path: str, input_file: str, output_file: str) -> tuple[bool, str]:
-    cmd = [ffmpeg_path, "-i", input_file, "-codec:a", "libmp3lame", "-q:a", "2", "-y", output_file]
 
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await proc.communicate()
-
-        if proc.returncode != 0:
-            error = (stderr or stdout).decode(errors="replace")
-            return False, error
-        return True, "OK"
-    except Exception as e:
-        return False, str(e)
 
 
 @owner_only
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     has_mp4decrypt = check_tool(MP4DECRYPT_PATH)
-    has_ffmpeg = check_tool(FFMPEG_PATH)
 
     await update.message.reply_text(
         "<b>Widevine DRM Downloader</b>\n\n"
-        f"mp4decrypt: {'Ready' if has_mp4decrypt else 'Not Found'}\n"
-        f"ffmpeg: {'Ready' if has_ffmpeg else 'Not Found'}\n\n"
+        f"mp4decrypt: {'Ready' if has_mp4decrypt else 'Not Found'}\n\n"
         "<b>Commands</b>\n"
         "/drm — Start download\n"
         "/status — Check tools\n"
@@ -247,14 +228,11 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 @owner_only
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     has_mp4decrypt = check_tool(MP4DECRYPT_PATH)
-    has_ffmpeg = check_tool(FFMPEG_PATH)
 
     await update.message.reply_text(
         "<b>Status</b>\n\n"
         f"mp4decrypt: {'Ready' if has_mp4decrypt else 'Missing'}\n"
         f"Path: <code>{MP4DECRYPT_PATH}</code>\n\n"
-        f"ffmpeg: {'Ready' if has_ffmpeg else 'Missing'}\n"
-        f"Path: <code>{FFMPEG_PATH}</code>\n\n"
         f"Default Quality: <code>{DEFAULT_QUALITY}</code>",
         parse_mode="HTML",
     )
@@ -318,8 +296,8 @@ async def receive_keys(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("128k", callback_data="q_128k"),
         ],
         [
+            InlineKeyboardButton("196k", callback_data="q_196k"),
             InlineKeyboardButton("256k", callback_data="q_256k"),
-            InlineKeyboardButton(f"Default ({DEFAULT_QUALITY})", callback_data=f"q_{DEFAULT_QUALITY}"),
         ],
     ]
 
@@ -439,23 +417,6 @@ async def receive_name_and_process(update: Update, context: ContextTypes.DEFAULT
         await status_msg.edit_text(f"Decrypted — {decrypted_size} MB")
         await asyncio.sleep(0.3)
 
-        mp3_file = None
-        has_ffmpeg = check_tool(FFMPEG_PATH)
-
-        if has_ffmpeg:
-            mp3_file = os.path.join(work_dir, f"{output_name}.mp3")
-            await status_msg.edit_text("[5/5] Converting to MP3...")
-
-            success, error_msg = await run_ffmpeg_convert(FFMPEG_PATH, decrypted_file, mp3_file)
-
-            if not success:
-                mp3_file = None
-                await status_msg.edit_text("MP3 conversion failed, sending M4A.")
-                await asyncio.sleep(0.5)
-        else:
-            await status_msg.edit_text("ffmpeg not found, skipping MP3 conversion.")
-            await asyncio.sleep(0.5)
-
         await status_msg.edit_text("Uploading...")
 
         m4a_size = round(os.path.getsize(decrypted_file) / 1048576, 2)
@@ -467,23 +428,11 @@ async def receive_name_and_process(update: Update, context: ContextTypes.DEFAULT
                 parse_mode="HTML",
             )
 
-        if mp3_file and os.path.exists(mp3_file):
-            mp3_size = round(os.path.getsize(mp3_file) / 1048576, 2)
-            with open(mp3_file, "rb") as f:
-                await update.message.reply_document(
-                    document=f,
-                    filename=f"{output_name}.mp3",
-                    caption=f"<b>{output_name}.mp3</b> ({mp3_size} MB) | {quality}",
-                    parse_mode="HTML",
-                )
-
         result_text = (
             f"<b>Done</b>\n\n"
             f"{output_name}.m4a — {m4a_size} MB\n"
+            f"\nQuality: {quality} | Keys: {len(keys)}"
         )
-        if mp3_file and os.path.exists(mp3_file):
-            result_text += f"{output_name}.mp3 — {mp3_size} MB\n"
-        result_text += f"\nQuality: {quality} | Keys: {len(keys)}"
 
         await status_msg.edit_text(result_text, parse_mode="HTML")
 
