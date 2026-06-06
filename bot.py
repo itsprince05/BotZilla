@@ -162,6 +162,30 @@ def parse_mpd(mpd_content: str, quality: str) -> dict | None:
     except ET.ParseError:
         return None
 
+def get_mpd_qualities(mpd_content: str) -> list[str]:
+    qualities = []
+    try:
+        root = ET.fromstring(mpd_content)
+        
+        for rep in root.iter("{urn:mpeg:dash:schema:mpd:2011}Representation"):
+            base_url_elem = rep.find("{urn:mpeg:dash:schema:mpd:2011}BaseURL")
+            if base_url_elem is not None and base_url_elem.text:
+                m = re.search(r'protected_audio_mpd_(.*?)\.mp4', base_url_elem.text)
+                if m and m.group(1) not in qualities:
+                    qualities.append(m.group(1))
+
+        for rep in root.iter("Representation"):
+            base_url_elem = rep.find("BaseURL")
+            if base_url_elem is not None and base_url_elem.text:
+                m = re.search(r'protected_audio_mpd_(.*?)\.mp4', base_url_elem.text)
+                if m and m.group(1) not in qualities:
+                    qualities.append(m.group(1))
+
+        qualities.sort(key=lambda x: int(re.sub(r'\D', '', x)) if re.sub(r'\D', '', x) else 0)
+    except ET.ParseError:
+        pass
+    return qualities
+
 
 def parse_keys_input(text: str) -> dict:
     keys = {}
@@ -264,8 +288,17 @@ async def receive_mpd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Invalid URL. Send a valid MPD URL starting with http/https.")
         return ASK_MPD
 
+    status_msg = await update.message.reply_text("Fetching MPD manifest...")
+    mpd_content = await fetch_mpd(mpd_url)
+    
+    if not mpd_content:
+        await status_msg.edit_text("Failed to fetch MPD. Check the URL and try again.")
+        return ASK_MPD
+
     context.user_data["mpd_url"] = mpd_url
-    await update.message.reply_text(
+    context.user_data["mpd_content"] = mpd_content
+    
+    await status_msg.edit_text(
         "<b>Step 2/4 — Decryption Keys</b>\n\n"
         "Send KID:KEY pairs, one per line.\n\n"
         "Format:\n"
@@ -290,16 +323,14 @@ async def receive_keys(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     context.user_data["keys"] = keys
 
-    keyboard = [
-        [
-            InlineKeyboardButton("64k", callback_data="q_64k"),
-            InlineKeyboardButton("128k", callback_data="q_128k"),
-        ],
-        [
-            InlineKeyboardButton("196k", callback_data="q_196k"),
-            InlineKeyboardButton("256k", callback_data="q_256k"),
-        ],
-    ]
+    qualities = get_mpd_qualities(context.user_data.get("mpd_content", ""))
+    if not qualities:
+        qualities = ["64k", "128k", "196k", "256k"]
+
+    keyboard = []
+    for i in range(0, len(qualities), 2):
+        row = [InlineKeyboardButton(q, callback_data=f"q_{q}") for q in qualities[i:i+2]]
+        keyboard.append(row)
 
     await update.message.reply_text(
         f"<b>Step 3/4 — Quality</b>\n\n"
@@ -362,12 +393,13 @@ async def receive_name_and_process(update: Update, context: ContextTypes.DEFAULT
     work_dir = tempfile.mkdtemp(prefix="drm_")
 
     try:
-        await status_msg.edit_text("[1/5] Fetching MPD...")
-
-        mpd_content = await fetch_mpd(mpd_url)
+        mpd_content = context.user_data.get("mpd_content")
         if not mpd_content:
-            await status_msg.edit_text("Failed to fetch MPD.")
-            return ConversationHandler.END
+            await status_msg.edit_text("[1/5] Fetching MPD...")
+            mpd_content = await fetch_mpd(mpd_url)
+            if not mpd_content:
+                await status_msg.edit_text("Failed to fetch MPD.")
+                return ConversationHandler.END
 
         await status_msg.edit_text("[2/5] Parsing MPD...")
 
