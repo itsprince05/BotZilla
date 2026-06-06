@@ -671,6 +671,15 @@ async def cmd_update(client: Client, message: Message):
 
         await status_msg.edit_text("Update Complete...")
         
+        # Install requirements
+        pip_proc = await asyncio.create_subprocess_exec(
+            sys.executable, "-m", "pip", "install", "-r", "requirements.txt",
+            cwd=BOT_DIR,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await pip_proc.communicate()
+        
         with open(RESTART_FLAG, "w") as f:
             json.dump({"chat_id": chat_id}, f)
         
@@ -920,17 +929,26 @@ async def main():
         logger.error("BOT_TOKEN, API_ID, or API_HASH not found in .env file!")
         return
 
-    await ensure_tools()
+    try:
+        await ensure_tools()
+    except Exception as e:
+        logger.error(f"ensure_tools failed: {e}")
 
     # Start Dashboard tunnel
-    start_cloudflare_tunnel()
+    try:
+        start_cloudflare_tunnel()
+    except Exception as e:
+        logger.error(f"start_cloudflare_tunnel failed: {e}")
     
     await app.start()
     logger.info("Bot started via Pyrogram MTProto...")
     await asyncio.sleep(2)
 
     # Send startup message (like Hello bot's post_init)
-    await send_startup_message()
+    try:
+        await send_startup_message()
+    except Exception as e:
+        logger.error(f"send_startup_message failed: {e}")
 
     # Keep running
     import pyrogram
@@ -955,6 +973,7 @@ async def send_startup_message():
         chat_id = OWNER_IDS[0]
     
     if not chat_id:
+        logger.error("No chat_id for startup message")
         return
     
     try:
@@ -974,4 +993,17 @@ async def send_startup_message():
         logger.error(f"Failed to send startup message: {e}")
 
 if __name__ == "__main__":
-    app.run(main())
+    try:
+        app.run(main())
+    except Exception as e:
+        logger.error(f"FATAL CRASH: {e}")
+        # Try to notify owner about the crash
+        import traceback
+        crash_info = traceback.format_exc()
+        logger.error(crash_info)
+        # Write crash log to file
+        try:
+            with open(os.path.join(BOT_DIR, "crash.log"), "w") as f:
+                f.write(crash_info)
+        except:
+            pass
