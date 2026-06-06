@@ -1,7 +1,9 @@
 import os
 import re
 import sys
+import io
 import json
+import zipfile
 import asyncio
 import logging
 import subprocess
@@ -26,7 +28,8 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OWNER_IDS = [int(x.strip()) for x in os.getenv("OWNER_IDS", "").split(",") if x.strip()]
-MP4DECRYPT_PATH = os.getenv("MP4DECRYPT_PATH", os.path.join(os.path.dirname(__file__), "mp4decrypt.exe"))
+_MP4DECRYPT_BIN = "mp4decrypt.exe" if os.name == "nt" else "mp4decrypt"
+MP4DECRYPT_PATH = os.getenv("MP4DECRYPT_PATH", os.path.join(os.path.dirname(__file__), _MP4DECRYPT_BIN))
 FFMPEG_PATH = os.getenv("FFMPEG_PATH", "ffmpeg")
 DEFAULT_QUALITY = os.getenv("DEFAULT_QUALITY", "64k")
 ALLOWED_CHATS = [int(x.strip()) for x in os.getenv("ALLOWED_CHATS", "").split(",") if x.strip()]
@@ -546,7 +549,36 @@ async def cmd_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_msg.edit_text(f"Update failed: {str(e)[:300]}")
 
 
-async def post_restart(app: Application):
+async def ensure_tools():
+    if not os.path.exists(MP4DECRYPT_PATH):
+        logger.info("mp4decrypt not found. Downloading...")
+        is_windows = os.name == "nt"
+        if is_windows:
+            url = "https://www.bok.net/Bento4/binaries/Bento4-SDK-1-6-0-641.x86_64-microsoft-win32.zip"
+            zip_bin_path = "Bento4-SDK-1-6-0-641.x86_64-microsoft-win32/bin/mp4decrypt.exe"
+        else:
+            url = "https://www.bok.net/Bento4/binaries/Bento4-SDK-1-6-0-641.x86_64-unknown-linux.zip"
+            zip_bin_path = "Bento4-SDK-1-6-0-641.x86_64-unknown-linux/bin/mp4decrypt"
+        
+        try:
+            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
+                async with session.get(url) as resp:
+                    if resp.status == 200:
+                        content = await resp.read()
+                        with zipfile.ZipFile(io.BytesIO(content)) as z:
+                            with z.open(zip_bin_path) as src, open(MP4DECRYPT_PATH, "wb") as dst:
+                                dst.write(src.read())
+                        if not is_windows:
+                            os.chmod(MP4DECRYPT_PATH, 0o755)
+                        logger.info("Successfully downloaded and extracted mp4decrypt.")
+                    else:
+                        logger.error(f"Failed to download mp4decrypt. HTTP {resp.status}")
+        except Exception as e:
+            logger.error(f"Error downloading mp4decrypt: {e}")
+
+async def post_init(app: Application):
+    await ensure_tools()
+    
     if not os.path.exists(RESTART_FLAG):
         return
     try:
@@ -588,7 +620,7 @@ def main():
     app.add_handler(CommandHandler("update", cmd_update))
     app.add_handler(drm_handler)
 
-    app.post_init = post_restart
+    app.post_init = post_init
 
     logger.info("Bot started — polling...")
     app.run_polling(drop_pending_updates=True)
