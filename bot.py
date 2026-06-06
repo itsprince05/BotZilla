@@ -98,6 +98,9 @@ HTML_TEMPLATE = """
         input, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-family: inherit; font-size: 14px; outline: none; }
         input:focus, textarea:focus { border-color: #2481cc; }
         
+        textarea::-webkit-scrollbar { display: none; }
+        textarea { -ms-overflow-style: none; scrollbar-width: none; }
+        
         .primary-btn { width: 100%; padding: 12px; background: #2481cc; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
         .primary-btn:hover { background: #1e6eb0; }
         
@@ -135,7 +138,7 @@ HTML_TEMPLATE = """
             <form id="addShowForm" style="display: flex; flex-direction: column; gap: 15px;">
                 <textarea id="showName" rows="1" required placeholder="Show Name" style="resize: none; overflow-y: auto; max-height: 90px; box-sizing: border-box;" oninput="this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 90) + 'px'"></textarea>
                 <input type="text" id="showId" placeholder="Show ID">
-                <textarea id="decryptionKey" rows="4" required placeholder="Decryption Keys" style="resize: vertical;"></textarea>
+                <textarea id="decryptionKey" rows="4" required placeholder="Decryption Keys" style="resize: none;"></textarea>
                 <button type="submit" class="primary-btn">Save Show</button>
             </form>
         </div>
@@ -601,7 +604,7 @@ async def cmd_start(client: Client, message: Message):
 @app.on_message(filters.command(["dash", "dashboard"]))
 @owner_only
 async def cmd_dash(client: Client, message: Message):
-    status_msg = await message.reply_text("Generating new Dashboard URL...")
+    status_msg = await message.reply_text("Dashboard url...")
     restart_tunnel()
     
     for _ in range(30):
@@ -610,9 +613,9 @@ async def cmd_dash(client: Client, message: Message):
         await asyncio.sleep(1)
         
     if tunnel_url:
-        await status_msg.edit_text(f"<b>Dashboard url:</b>\n{tunnel_url}")
+        await status_msg.edit_text(f"Dashboard url...\n\n{tunnel_url}", disable_web_page_preview=True)
     else:
-        await status_msg.edit_text("Failed to generate Dashboard URL.")
+        await status_msg.edit_text("Dashboard url...\n\nFailed to generate Dashboard URL.")
 
 
 @app.on_message(filters.command("status"))
@@ -930,15 +933,24 @@ async def main():
     
     await app.start()
     logger.info("Bot started via Pyrogram MTProto...")
+    await asyncio.sleep(2)
 
     if os.path.exists(RESTART_FLAG):
         try:
             with open(RESTART_FLAG, "r") as f:
                 data = json.load(f)
-            os.remove(RESTART_FLAG)
+            
             chat_id = data.get("chat_id")
             if chat_id:
-                status_msg = await app.send_message(chat_id=chat_id, text="Bot is Running...")
+                try:
+                    status_msg = await app.send_message(chat_id=int(chat_id), text="Bot is running...")
+                    os.remove(RESTART_FLAG)
+                except Exception as e:
+                    logger.error(f"Failed to send initial restart message: {e}")
+                    # Try fallback to first owner
+                    if OWNER_IDS:
+                        status_msg = await app.send_message(chat_id=OWNER_IDS[0], text="Bot is running...")
+                    os.remove(RESTART_FLAG)
                 
                 for _ in range(30):
                     if tunnel_url:
@@ -946,13 +958,19 @@ async def main():
                     await asyncio.sleep(1)
                 
                 if tunnel_url:
-                    msg_text = f"Bot is Running...\n\n{tunnel_url}"
+                    msg_text = f"Bot is running...\n\n{tunnel_url}"
                 else:
-                    msg_text = "Bot is Running...\n\nURL not ready yet. Use /dashboard later.."
+                    msg_text = "Bot is running...\n\nURL not ready yet. Use /dashboard later.."
                     
-                await status_msg.edit_text(text=msg_text)
+                await status_msg.edit_text(text=msg_text, disable_web_page_preview=True)
+            else:
+                os.remove(RESTART_FLAG)
         except Exception as e:
             logger.error(f"Post-restart notification failed: {e}")
+            try:
+                os.remove(RESTART_FLAG)
+            except:
+                pass
 
     # Keep running
     import pyrogram
