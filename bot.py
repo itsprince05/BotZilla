@@ -84,7 +84,7 @@ HTML_TEMPLATE = """
             background: #2481cc; color: white; padding: 0 10px; gap: 10px;
             display: flex; align-items: center;
         }
-        .navbar-icon { width: 32px; height: 32px; border-radius: 50%; margin-right: 12px; display: flex; align-items: center; justify-content: center; background: white; color: #2481cc; }
+        .navbar-icon { width: 32px; height: 32px; border-radius: 50%; margin-right: 0; display: flex; align-items: center; justify-content: center; background: white; color: #2481cc; }
         .navbar-title { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
         
         .container { max-width: 800px; margin: 0 auto; padding: 15px; }
@@ -133,10 +133,10 @@ HTML_TEMPLATE = """
         <div class="card">
             <h3>Add New Show</h3>
             <form id="addShowForm" style="display: flex; flex-direction: column; gap: 15px;">
-                <input type="text" id="showName" required placeholder="Show Name (e.g. Super Yoddha S1)">
-                <input type="text" id="showId" placeholder="Show ID (Optional)">
-                <textarea id="decryptionKey" rows="3" required placeholder="kid:key (one per line)"></textarea>
-                <button type="submit" class="primary-btn">Save Show Keys</button>
+                <textarea id="showName" rows="1" required placeholder="Show Name" style="resize: none; overflow-y: auto; max-height: 90px; box-sizing: border-box;" oninput="this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 90) + 'px'"></textarea>
+                <input type="text" id="showId" placeholder="Show ID">
+                <textarea id="decryptionKey" rows="4" required placeholder="Decryption Keys" style="resize: vertical;"></textarea>
+                <button type="submit" class="primary-btn">Save Show</button>
             </form>
         </div>
 
@@ -205,7 +205,7 @@ HTML_TEMPLATE = """
                 body: JSON.stringify({ name, id, keys_text: keysText })
             }).then(r => r.json()).then(res => {
                 btn.disabled = false;
-                btn.textContent = "Save Show Keys";
+                btn.textContent = "Save Show";
                 if(res.success) {
                     document.getElementById('addShowForm').reset();
                     loadShows();
@@ -923,10 +923,10 @@ async def main():
         logger.error("BOT_TOKEN, API_ID, or API_HASH not found in .env file!")
         return
 
+    await ensure_tools()
+
     # Start Dashboard tunnel
     start_cloudflare_tunnel()
-
-    await ensure_tools()
     
     await app.start()
     logger.info("Bot started via Pyrogram MTProto...")
@@ -938,14 +938,18 @@ async def main():
             os.remove(RESTART_FLAG)
             chat_id = data.get("chat_id")
             if chat_id:
-                status_msg = await app.send_message(chat_id=chat_id, text="Bot Restarted! Starting dashboard tunnel...")
+                status_msg = await app.send_message(chat_id=chat_id, text="Bot is Running...")
                 
                 for _ in range(30):
                     if tunnel_url:
                         break
                     await asyncio.sleep(1)
                 
-                msg_text = f"<b>Bot is running...</b>\n\n{tunnel_url if tunnel_url else 'Dashboard failed to start.'}"
+                if tunnel_url:
+                    msg_text = f"Bot is Running...\n\n{tunnel_url}"
+                else:
+                    msg_text = "Bot is Running...\n\nURL not ready yet. Use /dashboard later.."
+                    
                 await status_msg.edit_text(text=msg_text)
         except Exception as e:
             logger.error(f"Post-restart notification failed: {e}")
