@@ -684,7 +684,8 @@ async def cmd_update(client: Client, message: Message):
             json.dump({"chat_id": chat_id}, f)
         
         await asyncio.sleep(1)
-        # Stop old tunnel before restart (like Hello bot)
+        # Properly stop Pyrogram before restart (critical for MTProto session)
+        await app.stop()
         stop_tunnel()
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
