@@ -408,6 +408,9 @@ async def receive_keys(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 filename=f"{output_name}.m4a",
                 caption=f"<b>{output_name}.m4a</b> ({m4a_size} MB) | {quality}",
                 parse_mode="HTML",
+                read_timeout=120,
+                write_timeout=120,
+                connect_timeout=120,
             )
 
         result_text = (
