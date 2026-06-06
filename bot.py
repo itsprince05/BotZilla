@@ -642,7 +642,7 @@ async def cmd_cancel(client: Client, message: Message):
 @owner_only
 async def cmd_update(client: Client, message: Message):
     chat_id = message.chat.id
-    status_msg = await message.reply_text("Pulling from GitHub...")
+    status_msg = await message.reply_text("Updating Bot...")
 
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -659,34 +659,21 @@ async def cmd_update(client: Client, message: Message):
             return
 
         if "Already up to date" in output:
-            await status_msg.edit_text("Already up to date. No restart needed.")
+            await status_msg.edit_text("Already up to date...")
             return
 
-        await status_msg.edit_text(f"Pulled.\n<code>{output[:200]}</code>\n\nInstalling requirements...")
-
-        pip_proc = await asyncio.create_subprocess_exec(
-            sys.executable, "-m", "pip", "install", "-r", "requirements.txt",
-            cwd=BOT_DIR,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        pip_stdout, pip_stderr = await pip_proc.communicate()
+        await status_msg.edit_text("Update Complete...")
         
-        if pip_proc.returncode != 0:
-            pip_err = (pip_stderr or pip_stdout).decode(errors="replace").strip()
-            await status_msg.edit_text(f"Pip install failed, but restarting anyway...\n<code>{pip_err[:200]}</code>")
-            await asyncio.sleep(2)
-        else:
-            await status_msg.edit_text("Requirements installed.\n\nRestarting...")
-
         with open(RESTART_FLAG, "w") as f:
             json.dump({"chat_id": chat_id}, f)
-
-        await asyncio.sleep(0.5)
+        
+        await asyncio.sleep(1)
+        # Stop old tunnel before restart
+        restart_tunnel()
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
     except Exception as e:
-        await status_msg.edit_text(f"Update failed: {str(e)[:300]}")
+        await status_msg.edit_text(f"Update failed...")
 
 
 @app.on_message(filters.command("drm"))
@@ -935,47 +922,49 @@ async def main():
     logger.info("Bot started via Pyrogram MTProto...")
     await asyncio.sleep(2)
 
-    if os.path.exists(RESTART_FLAG):
-        try:
-            with open(RESTART_FLAG, "r") as f:
-                data = json.load(f)
-            
-            chat_id = data.get("chat_id")
-            if chat_id:
-                try:
-                    status_msg = await app.send_message(chat_id=int(chat_id), text="Bot is running...")
-                    os.remove(RESTART_FLAG)
-                except Exception as e:
-                    logger.error(f"Failed to send initial restart message: {e}")
-                    # Try fallback to first owner
-                    if OWNER_IDS:
-                        status_msg = await app.send_message(chat_id=OWNER_IDS[0], text="Bot is running...")
-                    os.remove(RESTART_FLAG)
-                
-                for _ in range(30):
-                    if tunnel_url:
-                        break
-                    await asyncio.sleep(1)
-                
-                if tunnel_url:
-                    msg_text = f"Bot is running...\n\n{tunnel_url}"
-                else:
-                    msg_text = "Bot is running...\n\nURL not ready yet. Use /dashboard later.."
-                    
-                await status_msg.edit_text(text=msg_text, disable_web_page_preview=True)
-            else:
-                os.remove(RESTART_FLAG)
-        except Exception as e:
-            logger.error(f"Post-restart notification failed: {e}")
-            try:
-                os.remove(RESTART_FLAG)
-            except:
-                pass
+    # Send startup message (like Hello bot's post_init)
+    await send_startup_message()
 
     # Keep running
     import pyrogram
     await pyrogram.idle()
     await app.stop()
+
+async def send_startup_message():
+    """Send 'Bot is running...' then edit with dashboard URL"""
+    # Determine where to send
+    chat_id = None
+    if os.path.exists(RESTART_FLAG):
+        try:
+            with open(RESTART_FLAG, "r") as f:
+                data = json.load(f)
+            chat_id = data.get("chat_id")
+            os.remove(RESTART_FLAG)
+        except Exception:
+            pass
+    
+    # Fallback to first owner if no restart flag
+    if not chat_id and OWNER_IDS:
+        chat_id = OWNER_IDS[0]
+    
+    if not chat_id:
+        return
+    
+    try:
+        msg = await app.send_message(chat_id=int(chat_id), text="Bot is running...")
+        
+        # Wait for tunnel URL
+        for _ in range(30):
+            if tunnel_url:
+                break
+            await asyncio.sleep(1)
+        
+        if tunnel_url:
+            await msg.edit_text(f"Bot is running...\n\n{tunnel_url}", disable_web_page_preview=True)
+        else:
+            await msg.edit_text("Bot is running...\n\nURL not ready yet. Use /dashboard later..")
+    except Exception as e:
+        logger.error(f"Failed to send startup message: {e}")
 
 if __name__ == "__main__":
     app.run(main())
