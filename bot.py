@@ -9,6 +9,7 @@ import logging
 import subprocess
 import tempfile
 import ssl
+import time
 import xml.etree.ElementTree as ET
 
 import aiohttp
@@ -39,7 +40,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-ASK_MPD, ASK_KEYS, ASK_QUALITY, ASK_NAME = range(4)
+ASK_MPD, ASK_KEYS = range(2)
 RESTART_FLAG = os.path.join(os.path.dirname(__file__), "restart.flag")
 BOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -324,62 +325,12 @@ async def receive_keys(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["keys"] = keys
 
     qualities = get_mpd_qualities(context.user_data.get("mpd_content", ""))
-    if not qualities:
-        qualities = ["64k", "128k", "196k", "256k"]
-
-    keyboard = []
-    for i in range(0, len(qualities), 2):
-        row = [InlineKeyboardButton(q, callback_data=f"q_{q}") for q in qualities[i:i+2]]
-        keyboard.append(row)
-
-    await update.message.reply_text(
-        f"<b>Step 3/4 — Quality</b>\n\n"
-        f"{len(keys)} key(s) received.\n\n"
-        f"Select quality or type a custom value.",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-    )
-    return ASK_QUALITY
-
-
-async def receive_quality_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    quality = query.data.replace("q_", "")
-    context.user_data["quality"] = quality
-
-    await query.edit_message_text(
-        f"<b>Step 4/4 — Output Name</b>\n\n"
-        f"Quality: <code>{quality}</code>\n\n"
-        f"Send the output filename (without extension).",
-        parse_mode="HTML",
-    )
-    return ASK_NAME
-
-
-async def receive_quality_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    quality = update.message.text.strip()
-    context.user_data["quality"] = quality
-
-    await update.message.reply_text(
-        f"<b>Step 4/4 — Output Name</b>\n\n"
-        f"Quality: <code>{quality}</code>\n\n"
-        f"Send the output filename (without extension).",
-        parse_mode="HTML",
-    )
-    return ASK_NAME
-
-
-async def receive_name_and_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    output_name = update.message.text.strip()
-    output_name = re.sub(r'[<>:"/\\|?*]', '_', output_name)
+    quality = "128k" if "128k" in qualities else (qualities[0] if qualities else "128k")
+    output_name = str(int(time.time()))
 
     mpd_url = context.user_data["mpd_url"]
-    keys = context.user_data["keys"]
-    quality = context.user_data["quality"]
-
     keys_preview = "\n".join([f"  <code>{kid}:{key}</code>" for kid, key in keys.items()])
+    
     status_msg = await update.message.reply_text(
         "<b>Starting</b>\n\n"
         f"MPD: <code>{mpd_url[:80]}...</code>\n"
@@ -406,8 +357,7 @@ async def receive_name_and_process(update: Update, context: ContextTypes.DEFAULT
         audio_info = parse_mpd(mpd_content, quality)
         if not audio_info:
             await status_msg.edit_text(
-                f"Quality <code>{quality}</code> not found in MPD.\n"
-                "Try a different value.",
+                f"Quality <code>{quality}</code> not found in MPD.\n",
                 parse_mode="HTML",
             )
             return ConversationHandler.END
@@ -449,12 +399,12 @@ async def receive_name_and_process(update: Update, context: ContextTypes.DEFAULT
         await status_msg.edit_text(f"Decrypted — {decrypted_size} MB")
         await asyncio.sleep(0.3)
 
-        await status_msg.edit_text("Uploading...")
+        await status_msg.edit_text("Uploading as Audio...")
 
         m4a_size = round(os.path.getsize(decrypted_file) / 1048576, 2)
         with open(decrypted_file, "rb") as f:
-            await update.message.reply_document(
-                document=f,
+            await update.message.reply_audio(
+                audio=f,
                 filename=f"{output_name}.m4a",
                 caption=f"<b>{output_name}.m4a</b> ({m4a_size} MB) | {quality}",
                 parse_mode="HTML",
@@ -585,11 +535,6 @@ def main():
         states={
             ASK_MPD: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_mpd)],
             ASK_KEYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_keys)],
-            ASK_QUALITY: [
-                CallbackQueryHandler(receive_quality_button, pattern=r"^q_"),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_quality_text),
-            ],
-            ASK_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_name_and_process)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         per_user=True,
