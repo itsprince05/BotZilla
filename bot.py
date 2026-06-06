@@ -611,7 +611,7 @@ async def cmd_start(client: Client, message: Message):
 @app.on_message(filters.command(["dash", "dashboard"]))
 @owner_only
 async def cmd_dash(client: Client, message: Message):
-    status_msg = await message.reply_text("Dashboard URL...")
+    status_msg = await message.reply_text("Generating new dashboard access...")
     restart_tunnel()
     
     for _ in range(30):
