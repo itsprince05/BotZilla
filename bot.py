@@ -690,13 +690,15 @@ async def main():
             os.remove(RESTART_FLAG)
             chat_id = data.get("chat_id")
             if chat_id:
+                status_msg = await app.send_message(chat_id=chat_id, text="Bot Restarted! Starting dashboard tunnel...")
+                
                 for _ in range(30):
                     if tunnel_url:
                         break
                     await asyncio.sleep(1)
                 
                 msg_text = f"<b>Bot is running...</b>\n\n{tunnel_url if tunnel_url else 'Dashboard failed to start.'}"
-                await app.send_message(chat_id=chat_id, text=msg_text)
+                await status_msg.edit_text(text=msg_text)
         except Exception as e:
             logger.error(f"Post-restart notification failed: {e}")
 
