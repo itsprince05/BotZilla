@@ -611,7 +611,7 @@ async def cmd_start(client: Client, message: Message):
 @app.on_message(filters.command(["dash", "dashboard"]))
 @owner_only
 async def cmd_dash(client: Client, message: Message):
-    status_msg = await message.reply_text("Dashboard url...")
+    status_msg = await message.reply_text("Dashboard URL...")
     restart_tunnel()
     
     for _ in range(30):
@@ -620,9 +620,9 @@ async def cmd_dash(client: Client, message: Message):
         await asyncio.sleep(1)
         
     if tunnel_url:
-        await status_msg.edit_text(f"Dashboard url...\n\n{tunnel_url}", disable_web_page_preview=True)
+        await status_msg.edit_text(f"Dashboard URL...\n\n{tunnel_url}", disable_web_page_preview=True)
     else:
-        await status_msg.edit_text("Dashboard url...\n\nFailed to generate Dashboard URL.")
+        await status_msg.edit_text("Dashboard URL...\n\nFailed to generate Dashboard URL...")
 
 
 @app.on_message(filters.command("status"))
