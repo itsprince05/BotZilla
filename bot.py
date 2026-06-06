@@ -13,7 +13,6 @@ import time
 import xml.etree.ElementTree as ET
 
 import aiohttp
-from mutagen.mp4 import MP4
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -399,24 +398,19 @@ async def receive_keys(update: Update, context: ContextTypes.DEFAULT_TYPE):
         decrypted_size = round(os.path.getsize(decrypted_file) / 1048576, 2)
         await status_msg.edit_text(f"Decrypted — {decrypted_size} MB")
         await asyncio.sleep(0.3)
-
-        await status_msg.edit_text("Uploading as Audio...")
-
-        m4a_size = round(os.path.getsize(decrypted_file) / 1048576, 2)
         
-        audio_duration = 0
-        try:
-            audio_info = MP4(decrypted_file)
-            audio_duration = int(audio_info.info.length)
-        except Exception as ex:
-            logger.warning(f"Could not extract duration: {ex}")
+        pseudo_mp3_file = os.path.join(work_dir, f"{output_name}.mp3")
+        os.rename(decrypted_file, pseudo_mp3_file)
 
-        with open(decrypted_file, "rb") as f:
+        await status_msg.edit_text("Uploading as Audio (.mp3 extension)...")
+
+        file_size = round(os.path.getsize(pseudo_mp3_file) / 1048576, 2)
+        
+        with open(pseudo_mp3_file, "rb") as f:
             await update.message.reply_audio(
                 audio=f,
-                duration=audio_duration,
-                filename=f"{output_name}.m4a",
-                caption=f"<b>{output_name}.m4a</b> ({m4a_size} MB) | {quality}",
+                filename=f"{output_name}.mp3",
+                caption=f"<b>{output_name}.mp3</b> ({file_size} MB) | {quality}",
                 parse_mode="HTML",
                 read_timeout=120,
                 write_timeout=120,
@@ -425,7 +419,7 @@ async def receive_keys(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         result_text = (
             f"<b>Done</b>\n\n"
-            f"{output_name}.m4a — {m4a_size} MB\n"
+            f"{output_name}.mp3 — {file_size} MB\n"
             f"\nQuality: {quality} | Keys: {len(keys)}"
         )
 
