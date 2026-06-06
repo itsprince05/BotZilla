@@ -302,7 +302,22 @@ async def cmd_update(client: Client, message: Message):
             await status_msg.edit_text("Already up to date. No restart needed.")
             return
 
-        await status_msg.edit_text(f"Pulled.\n<code>{output[:300]}</code>\n\nRestarting...")
+        await status_msg.edit_text(f"Pulled.\n<code>{output[:200]}</code>\n\nInstalling requirements...")
+
+        pip_proc = await asyncio.create_subprocess_exec(
+            sys.executable, "-m", "pip", "install", "-r", "requirements.txt",
+            cwd=BOT_DIR,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        pip_stdout, pip_stderr = await pip_proc.communicate()
+        
+        if pip_proc.returncode != 0:
+            pip_err = (pip_stderr or pip_stdout).decode(errors="replace").strip()
+            await status_msg.edit_text(f"Pip install failed, but restarting anyway...\n<code>{pip_err[:200]}</code>")
+            await asyncio.sleep(2)
+        else:
+            await status_msg.edit_text("Requirements installed.\n\nRestarting...")
 
         with open(RESTART_FLAG, "w") as f:
             json.dump({"chat_id": chat_id}, f)
