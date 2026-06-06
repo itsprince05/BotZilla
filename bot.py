@@ -13,25 +13,18 @@ import time
 import xml.etree.ElementTree as ET
 
 import aiohttp
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    CallbackQueryHandler,
-    MessageHandler,
-    ConversationHandler,
-    ContextTypes,
-    filters,
-)
+from pyrogram import Client, filters
+from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 from dotenv import load_dotenv
 
 load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+API_ID = os.getenv("API_ID")
+API_HASH = os.getenv("API_HASH")
 OWNER_IDS = [int(x.strip()) for x in os.getenv("OWNER_IDS", "").split(",") if x.strip()]
 _MP4DECRYPT_BIN = "mp4decrypt.exe" if os.name == "nt" else "mp4decrypt"
 MP4DECRYPT_PATH = os.getenv("MP4DECRYPT_PATH", os.path.join(os.path.dirname(__file__), _MP4DECRYPT_BIN))
-DEFAULT_QUALITY = os.getenv("DEFAULT_QUALITY", "64k")
 ALLOWED_CHATS = [int(x.strip()) for x in os.getenv("ALLOWED_CHATS", "").split(",") if x.strip()]
 
 logging.basicConfig(
@@ -40,7 +33,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-ASK_MPD, ASK_KEYS = range(2)
 RESTART_FLAG = os.path.join(os.path.dirname(__file__), "restart.flag")
 BOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -48,16 +40,20 @@ SSL_CTX = ssl.create_default_context()
 SSL_CTX.check_hostname = False
 SSL_CTX.verify_mode = ssl.CERT_NONE
 
+# Conversation state
+# {user_id: {"mpd_url": str, "mpd_content": str}}
+user_states = {}
+
 
 def owner_only(func):
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        chat_id = update.effective_chat.id
+    async def wrapper(client: Client, message: Message):
+        chat_id = message.chat.id
         if ALLOWED_CHATS and chat_id not in ALLOWED_CHATS:
             return
-        user_id = update.effective_user.id
+        user_id = message.from_user.id
         if OWNER_IDS and user_id not in OWNER_IDS:
             return
-        return await func(update, context)
+        return await func(client, message)
     return wrapper
 
 
@@ -76,7 +72,7 @@ def check_tool(path: str) -> bool:
         return False
 
 
-async def download_file(url: str, output_path: str, status_msg) -> bool:
+async def download_file(url: str, output_path: str, status_msg: Message) -> bool:
     connector = aiohttp.TCPConnector(limit=0, force_close=False, enable_cleanup_closed=True)
     timeout = aiohttp.ClientTimeout(total=600)
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
@@ -163,6 +159,7 @@ def parse_mpd(mpd_content: str, quality: str) -> dict | None:
     except ET.ParseError:
         return None
 
+
 def get_mpd_qualities(mpd_content: str) -> list[str]:
     qualities = []
     try:
@@ -231,262 +228,6 @@ async def run_decrypt(mp4decrypt_path: str, keys: dict, input_file: str, output_
         return False, str(e)
 
 
-
-
-
-@owner_only
-async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    has_mp4decrypt = check_tool(MP4DECRYPT_PATH)
-
-    await update.message.reply_text(
-        "<b>Widevine DRM Downloader</b>\n\n"
-        f"mp4decrypt: {'Ready' if has_mp4decrypt else 'Not Found'}\n\n"
-        "<b>Commands</b>\n"
-        "/drm — Start download\n"
-        "/status — Check tools\n"
-        "/update — Pull and restart\n"
-        "/cancel — Cancel operation",
-        parse_mode="HTML",
-    )
-
-
-@owner_only
-async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    has_mp4decrypt = check_tool(MP4DECRYPT_PATH)
-
-    await update.message.reply_text(
-        "<b>Status</b>\n\n"
-        f"mp4decrypt: {'Ready' if has_mp4decrypt else 'Missing'}\n"
-        f"Path: <code>{MP4DECRYPT_PATH}</code>\n\n"
-        f"Default Quality: <code>{DEFAULT_QUALITY}</code>",
-        parse_mode="HTML",
-    )
-
-
-@owner_only
-async def drm_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not check_tool(MP4DECRYPT_PATH):
-        await update.message.reply_text(
-            "<b>mp4decrypt not found</b>\n"
-            f"Expected: <code>{MP4DECRYPT_PATH}</code>\n\n"
-            "Download from: https://www.bento4.com/downloads/",
-            parse_mode="HTML",
-        )
-        return ConversationHandler.END
-
-    await update.message.reply_text(
-        "<b>Step 1/4 — MPD URL</b>\n\n"
-        "Send the MPD manifest URL.",
-        parse_mode="HTML",
-    )
-    return ASK_MPD
-
-
-async def receive_mpd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    mpd_url = update.message.text.strip()
-
-    if not mpd_url.startswith("http"):
-        await update.message.reply_text("Invalid URL. Send a valid MPD URL starting with http/https.")
-        return ASK_MPD
-
-    status_msg = await update.message.reply_text("Fetching MPD manifest...")
-    mpd_content = await fetch_mpd(mpd_url)
-    
-    if not mpd_content:
-        await status_msg.edit_text("Failed to fetch MPD. Check the URL and try again.")
-        return ASK_MPD
-
-    context.user_data["mpd_url"] = mpd_url
-    context.user_data["mpd_content"] = mpd_content
-    
-    await status_msg.edit_text(
-        "<b>Step 2/4 — Decryption Keys</b>\n\n"
-        "Send KID:KEY pairs, one per line.\n\n"
-        "Format:\n"
-        "<code>kid1:key1\n"
-        "kid2:key2</code>",
-        parse_mode="HTML",
-    )
-    return ASK_KEYS
-
-
-async def receive_keys(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keys_text = update.message.text.strip()
-    keys = parse_keys_input(keys_text)
-
-    if not keys:
-        await update.message.reply_text(
-            "No valid keys found.\n\n"
-            "Send in format: <code>kid:key</code> (one per line)",
-            parse_mode="HTML",
-        )
-        return ASK_KEYS
-
-    context.user_data["keys"] = keys
-
-    qualities = get_mpd_qualities(context.user_data.get("mpd_content", ""))
-    quality = "128k" if "128k" in qualities else (qualities[0] if qualities else "128k")
-    output_name = str(int(time.time()))
-
-    mpd_url = context.user_data["mpd_url"]
-    keys_preview = "\n".join([f"  <code>{kid}:{key}</code>" for kid, key in keys.items()])
-    
-    status_msg = await update.message.reply_text(
-        "<b>Starting</b>\n\n"
-        f"MPD: <code>{mpd_url[:80]}...</code>\n"
-        f"Keys:\n{keys_preview}\n"
-        f"Quality: <code>{quality}</code>\n"
-        f"Output: <code>{output_name}</code>\n\n"
-        "Processing...",
-        parse_mode="HTML",
-    )
-
-    work_dir = tempfile.mkdtemp(prefix="drm_")
-
-    try:
-        mpd_content = context.user_data.get("mpd_content")
-        if not mpd_content:
-            await status_msg.edit_text("[1/5] Fetching MPD...")
-            mpd_content = await fetch_mpd(mpd_url)
-            if not mpd_content:
-                await status_msg.edit_text("Failed to fetch MPD.")
-                return ConversationHandler.END
-
-        await status_msg.edit_text("[2/5] Parsing MPD...")
-
-        audio_info = parse_mpd(mpd_content, quality)
-        if not audio_info:
-            await status_msg.edit_text(
-                f"Quality <code>{quality}</code> not found in MPD.\n",
-                parse_mode="HTML",
-            )
-            return ConversationHandler.END
-
-        mpd_base_url = mpd_url.rsplit("/", 1)[0]
-        audio_url = f"{mpd_base_url}/{audio_info['file']}"
-
-        await status_msg.edit_text(
-            f"MPD parsed.\n"
-            f"Quality: {quality} | Bandwidth: {audio_info['bandwidth']} bps | Codec: {audio_info['codec']}"
-        )
-        await asyncio.sleep(0.5)
-
-        encrypted_file = os.path.join(work_dir, "encrypted_audio.mp4")
-
-        await status_msg.edit_text("[3/5] Downloading encrypted audio...")
-
-        if not await download_file(audio_url, encrypted_file, status_msg):
-            return ConversationHandler.END
-
-        await asyncio.sleep(0.3)
-
-        decrypted_file = os.path.join(work_dir, f"{output_name}.m4a")
-
-        await status_msg.edit_text(f"[4/5] Decrypting with {len(keys)} key(s)...")
-
-        success, error_msg = await run_decrypt(MP4DECRYPT_PATH, keys, encrypted_file, decrypted_file)
-
-        if not success:
-            await status_msg.edit_text(
-                f"Decryption failed.\n\n<code>{error_msg[:500]}</code>",
-                parse_mode="HTML",
-            )
-            return ConversationHandler.END
-
-        os.remove(encrypted_file)
-
-        decrypted_size = round(os.path.getsize(decrypted_file) / 1048576, 2)
-        await status_msg.edit_text(f"Decrypted — {decrypted_size} MB")
-        await asyncio.sleep(0.3)
-        
-        pseudo_mp3_file = os.path.join(work_dir, f"{output_name}.mp3")
-        os.rename(decrypted_file, pseudo_mp3_file)
-
-        await status_msg.edit_text("Uploading as Audio (.mp3 extension)...")
-
-        file_size = round(os.path.getsize(pseudo_mp3_file) / 1048576, 2)
-        
-        with open(pseudo_mp3_file, "rb") as f:
-            await update.message.reply_audio(
-                audio=f,
-                filename=f"{output_name}.mp3",
-                caption=f"<b>{output_name}.mp3</b> ({file_size} MB) | {quality}",
-                parse_mode="HTML",
-                read_timeout=120,
-                write_timeout=120,
-                connect_timeout=120,
-            )
-
-        result_text = (
-            f"<b>Done</b>\n\n"
-            f"{output_name}.mp3 — {file_size} MB\n"
-            f"\nQuality: {quality} | Keys: {len(keys)}"
-        )
-
-        await status_msg.edit_text(result_text, parse_mode="HTML")
-
-    except Exception as e:
-        logger.exception("DRM download pipeline error")
-        await status_msg.edit_text(
-            f"Error:\n<code>{str(e)[:500]}</code>",
-            parse_mode="HTML",
-        )
-
-    finally:
-        for f in os.listdir(work_dir):
-            try:
-                os.remove(os.path.join(work_dir, f))
-            except Exception:
-                pass
-        try:
-            os.rmdir(work_dir)
-        except Exception:
-            pass
-
-    return ConversationHandler.END
-
-
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data.clear()
-    await update.message.reply_text("Cancelled.")
-    return ConversationHandler.END
-
-
-@owner_only
-async def cmd_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    status_msg = await update.message.reply_text("Pulling from GitHub...")
-
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "git", "pull",
-            cwd=BOT_DIR,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await proc.communicate()
-        output = (stdout or stderr).decode(errors="replace").strip()
-
-        if proc.returncode != 0:
-            await status_msg.edit_text(f"Git pull failed.\n\n<code>{output[:500]}</code>", parse_mode="HTML")
-            return
-
-        if "Already up to date" in output:
-            await status_msg.edit_text("Already up to date. No restart needed.")
-            return
-
-        await status_msg.edit_text(f"Pulled.\n<code>{output[:300]}</code>\n\nRestarting...", parse_mode="HTML")
-
-        with open(RESTART_FLAG, "w") as f:
-            json.dump({"chat_id": chat_id}, f)
-
-        await asyncio.sleep(0.5)
-        os.execv(sys.executable, [sys.executable] + sys.argv)
-
-    except Exception as e:
-        await status_msg.edit_text(f"Update failed: {str(e)[:300]}")
-
-
 async def ensure_tools():
     if not os.path.exists(MP4DECRYPT_PATH):
         logger.info("mp4decrypt not found. Downloading...")
@@ -514,50 +255,275 @@ async def ensure_tools():
         except Exception as e:
             logger.error(f"Error downloading mp4decrypt: {e}")
 
-async def post_init(app: Application):
-    await ensure_tools()
-    
-    if not os.path.exists(RESTART_FLAG):
-        return
-    try:
-        with open(RESTART_FLAG, "r") as f:
-            data = json.load(f)
-        os.remove(RESTART_FLAG)
-        chat_id = data.get("chat_id")
-        if chat_id:
-            await app.bot.send_message(chat_id=chat_id, text="Restarted.")
-    except Exception as e:
-        logger.error(f"Post-restart notification failed: {e}")
+
+app = Client("drm_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 
-def main():
-    if not BOT_TOKEN:
-        logger.error("BOT_TOKEN not found in .env file!")
-        return
+@app.on_message(filters.command("start"))
+@owner_only
+async def cmd_start(client: Client, message: Message):
+    has_mp4decrypt = check_tool(MP4DECRYPT_PATH)
 
-    app = Application.builder().token(BOT_TOKEN).build()
-
-    drm_handler = ConversationHandler(
-        entry_points=[CommandHandler("drm", drm_start)],
-        states={
-            ASK_MPD: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_mpd)],
-            ASK_KEYS: [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_keys)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-        per_user=True,
-        per_chat=True,
+    await message.reply_text(
+        "<b>Widevine DRM Downloader (Pyrogram)</b>\n\n"
+        f"mp4decrypt: {'Ready' if has_mp4decrypt else 'Not Found'}\n\n"
+        "<b>Commands</b>\n"
+        "/drm — Start download\n"
+        "/status — Check tools\n"
+        "/update — Pull and restart\n"
+        "/cancel — Cancel operation",
     )
 
-    app.add_handler(CommandHandler("start", cmd_start))
-    app.add_handler(CommandHandler("status", cmd_status))
-    app.add_handler(CommandHandler("update", cmd_update))
-    app.add_handler(drm_handler)
 
-    app.post_init = post_init
+@app.on_message(filters.command("status"))
+@owner_only
+async def cmd_status(client: Client, message: Message):
+    has_mp4decrypt = check_tool(MP4DECRYPT_PATH)
 
-    logger.info("Bot started — polling...")
-    app.run_polling(drop_pending_updates=True)
+    await message.reply_text(
+        "<b>Status</b>\n\n"
+        f"mp4decrypt: {'Ready' if has_mp4decrypt else 'Missing'}\n"
+        f"Path: <code>{MP4DECRYPT_PATH}</code>\n\n",
+    )
 
+
+@app.on_message(filters.command("cancel"))
+@owner_only
+async def cmd_cancel(client: Client, message: Message):
+    if message.from_user.id in user_states:
+        del user_states[message.from_user.id]
+    await message.reply_text("Cancelled.")
+
+
+@app.on_message(filters.command("update"))
+@owner_only
+async def cmd_update(client: Client, message: Message):
+    chat_id = message.chat.id
+    status_msg = await message.reply_text("Pulling from GitHub...")
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "git", "pull",
+            cwd=BOT_DIR,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await proc.communicate()
+        output = (stdout or stderr).decode(errors="replace").strip()
+
+        if proc.returncode != 0:
+            await status_msg.edit_text(f"Git pull failed.\n\n<code>{output[:500]}</code>")
+            return
+
+        if "Already up to date" in output:
+            await status_msg.edit_text("Already up to date. No restart needed.")
+            return
+
+        await status_msg.edit_text(f"Pulled.\n<code>{output[:300]}</code>\n\nRestarting...")
+
+        with open(RESTART_FLAG, "w") as f:
+            json.dump({"chat_id": chat_id}, f)
+
+        await asyncio.sleep(0.5)
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+
+    except Exception as e:
+        await status_msg.edit_text(f"Update failed: {str(e)[:300]}")
+
+
+@app.on_message(filters.command("drm"))
+@owner_only
+async def drm_start(client: Client, message: Message):
+    if not check_tool(MP4DECRYPT_PATH):
+        await message.reply_text(
+            "<b>mp4decrypt not found</b>\n"
+            f"Expected: <code>{MP4DECRYPT_PATH}</code>\n\n"
+            "Download from: https://www.bento4.com/downloads/",
+        )
+        return
+
+    user_states[message.from_user.id] = {"step": "ASK_MPD"}
+    await message.reply_text(
+        "<b>Step 1/2 — MPD URL</b>\n\n"
+        "Send the MPD manifest URL.",
+    )
+
+
+@app.on_message(filters.text & ~filters.command(["start", "status", "cancel", "update", "drm"]))
+@owner_only
+async def handle_text(client: Client, message: Message):
+    user_id = message.from_user.id
+    if user_id not in user_states:
+        return
+
+    state = user_states[user_id]
+    step = state.get("step")
+
+    if step == "ASK_MPD":
+        mpd_url = message.text.strip()
+        if not mpd_url.startswith("http"):
+            await message.reply_text("Invalid URL. Send a valid MPD URL starting with http/https.")
+            return
+
+        status_msg = await message.reply_text("Fetching MPD manifest...")
+        mpd_content = await fetch_mpd(mpd_url)
+        
+        if not mpd_content:
+            await status_msg.edit_text("Failed to fetch MPD. Check the URL and try again.")
+            return
+
+        state["mpd_url"] = mpd_url
+        state["mpd_content"] = mpd_content
+        state["step"] = "ASK_KEYS"
+        
+        await status_msg.edit_text(
+            "<b>Step 2/2 — Decryption Keys</b>\n\n"
+            "Send KID:KEY pairs, one per line.\n\n"
+            "Format:\n"
+            "<code>kid1:key1\n"
+            "kid2:key2</code>",
+        )
+        
+    elif step == "ASK_KEYS":
+        keys_text = message.text.strip()
+        keys = parse_keys_input(keys_text)
+
+        if not keys:
+            await message.reply_text("No valid keys found.\nSend in format: <code>kid:key</code>")
+            return
+
+        state["keys"] = keys
+        await process_drm(client, message, state)
+        del user_states[user_id]
+
+
+async def process_drm(client: Client, message: Message, state: dict):
+    keys = state["keys"]
+    mpd_url = state["mpd_url"]
+    mpd_content = state["mpd_content"]
+
+    qualities = get_mpd_qualities(mpd_content)
+    quality = "128k" if "128k" in qualities else (qualities[0] if qualities else "128k")
+    output_name = str(int(time.time()))
+
+    keys_preview = "\n".join([f"  <code>{kid}:{key}</code>" for kid, key in keys.items()])
+    
+    status_msg = await message.reply_text(
+        "<b>Starting</b>\n\n"
+        f"MPD: <code>{mpd_url[:80]}...</code>\n"
+        f"Keys:\n{keys_preview}\n"
+        f"Quality: <code>{quality}</code>\n"
+        f"Output: <code>{output_name}</code>\n\n"
+        "Processing...",
+    )
+
+    work_dir = tempfile.mkdtemp(prefix="drm_")
+
+    try:
+        await status_msg.edit_text("[1/5] Parsing MPD...")
+
+        audio_info = parse_mpd(mpd_content, quality)
+        if not audio_info:
+            await status_msg.edit_text(f"Quality <code>{quality}</code> not found in MPD.\n")
+            return
+
+        mpd_base_url = mpd_url.rsplit("/", 1)[0]
+        audio_url = f"{mpd_base_url}/{audio_info['file']}"
+
+        await status_msg.edit_text(
+            f"MPD parsed.\n"
+            f"Quality: {quality} | Bandwidth: {audio_info['bandwidth']} bps | Codec: {audio_info['codec']}"
+        )
+        await asyncio.sleep(0.5)
+
+        encrypted_file = os.path.join(work_dir, "encrypted_audio.mp4")
+
+        await status_msg.edit_text("[2/5] Downloading encrypted audio...")
+
+        if not await download_file(audio_url, encrypted_file, status_msg):
+            return
+
+        await asyncio.sleep(0.3)
+
+        decrypted_file = os.path.join(work_dir, f"{output_name}.m4a")
+
+        await status_msg.edit_text(f"[3/5] Decrypting with {len(keys)} key(s)...")
+
+        success, error_msg = await run_decrypt(MP4DECRYPT_PATH, keys, encrypted_file, decrypted_file)
+
+        if not success:
+            await status_msg.edit_text(f"Decryption failed.\n\n<code>{error_msg[:500]}</code>")
+            return
+
+        os.remove(encrypted_file)
+
+        decrypted_size = round(os.path.getsize(decrypted_file) / 1048576, 2)
+        await status_msg.edit_text(f"Decrypted — {decrypted_size} MB")
+        await asyncio.sleep(0.3)
+        
+        pseudo_mp3_file = os.path.join(work_dir, f"{output_name}.mp3")
+        os.rename(decrypted_file, pseudo_mp3_file)
+
+        await status_msg.edit_text("[4/5] Uploading as Audio (.mp3 extension)...")
+
+        file_size = round(os.path.getsize(pseudo_mp3_file) / 1048576, 2)
+        
+        # Pyrogram natively extracts audio metadata including duration perfectly.
+        await message.reply_audio(
+            audio=pseudo_mp3_file,
+            file_name=f"{output_name}.mp3",
+            caption=f"<b>{output_name}.mp3</b> ({file_size} MB) | {quality}",
+        )
+
+        result_text = (
+            f"<b>Done</b>\n\n"
+            f"{output_name}.mp3 — {file_size} MB\n"
+            f"\nQuality: {quality} | Keys: {len(keys)}"
+        )
+
+        await status_msg.edit_text(result_text)
+
+    except Exception as e:
+        logger.exception("DRM download pipeline error")
+        await status_msg.edit_text(f"Error:\n<code>{str(e)[:500]}</code>")
+
+    finally:
+        for f in os.listdir(work_dir):
+            try:
+                os.remove(os.path.join(work_dir, f))
+            except Exception:
+                pass
+        try:
+            os.rmdir(work_dir)
+        except Exception:
+            pass
+
+
+async def main():
+    if not BOT_TOKEN or not API_ID or not API_HASH:
+        logger.error("BOT_TOKEN, API_ID, or API_HASH not found in .env file!")
+        return
+
+    await ensure_tools()
+    
+    await app.start()
+    logger.info("Bot started via Pyrogram MTProto...")
+
+    if os.path.exists(RESTART_FLAG):
+        try:
+            with open(RESTART_FLAG, "r") as f:
+                data = json.load(f)
+            os.remove(RESTART_FLAG)
+            chat_id = data.get("chat_id")
+            if chat_id:
+                await app.send_message(chat_id=chat_id, text="Restarted.")
+        except Exception as e:
+            logger.error(f"Post-restart notification failed: {e}")
+
+    # Keep running
+    import pyrogram
+    await pyrogram.idle()
+    await app.stop()
 
 if __name__ == "__main__":
-    main()
+    app.run(main())
