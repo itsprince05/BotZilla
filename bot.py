@@ -538,7 +538,8 @@ def get_free_port():
         s.bind(('', 0))
         return s.getsockname()[1]
 
-def restart_tunnel():
+def stop_tunnel():
+    """Kill existing tunnel process without starting a new one"""
     global tunnel_process, tunnel_url
     if tunnel_process:
         try:
@@ -546,7 +547,12 @@ def restart_tunnel():
             tunnel_process.kill()
         except Exception:
             pass
+        tunnel_process = None
     tunnel_url = None
+
+def restart_tunnel():
+    """Kill existing tunnel and start a new one"""
+    stop_tunnel()
     
     cf_path = os.path.join(BOT_DIR, "cloudflared.exe" if os.name == "nt" else "cloudflared")
     if not os.path.exists(cf_path):
@@ -563,6 +569,7 @@ def restart_tunnel():
                     logger.info(f"Dashboard available at: {tunnel_url}")
 
     try:
+        global tunnel_process
         tunnel_process = subprocess.Popen(
             [cf_path, "tunnel", "--url", f"http://127.0.0.1:{dashboard_port}"],
             stdout=subprocess.PIPE,
@@ -668,8 +675,8 @@ async def cmd_update(client: Client, message: Message):
             json.dump({"chat_id": chat_id}, f)
         
         await asyncio.sleep(1)
-        # Stop old tunnel before restart
-        restart_tunnel()
+        # Stop old tunnel before restart (like Hello bot)
+        stop_tunnel()
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
     except Exception as e:
