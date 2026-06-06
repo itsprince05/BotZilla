@@ -89,7 +89,7 @@ async def download_file(url: str, output_path: str, status_msg: Message) -> bool
                 last_percent = -1
 
                 with open(output_path, "wb") as f:
-                    async for chunk in response.content.iter_chunked(524288):
+                    async for chunk in response.content.iter_chunked(1048576):
                         f.write(chunk)
                         downloaded += len(chunk)
 
@@ -434,7 +434,6 @@ async def process_drm(client: Client, message: Message, state: dict):
             f"MPD parsed.\n"
             f"Quality: {quality} | Bandwidth: {audio_info['bandwidth']} bps | Codec: {audio_info['codec']}"
         )
-        await asyncio.sleep(0.5)
 
         encrypted_file = os.path.join(work_dir, "encrypted_audio.mp4")
 
@@ -442,8 +441,6 @@ async def process_drm(client: Client, message: Message, state: dict):
 
         if not await download_file(audio_url, encrypted_file, status_msg):
             return
-
-        await asyncio.sleep(0.3)
 
         decrypted_file = os.path.join(work_dir, f"{output_name}.m4a")
 
@@ -459,7 +456,6 @@ async def process_drm(client: Client, message: Message, state: dict):
 
         decrypted_size = round(os.path.getsize(decrypted_file) / 1048576, 2)
         await status_msg.edit_text(f"Decrypted — {decrypted_size} MB")
-        await asyncio.sleep(0.3)
         
         pseudo_mp3_file = os.path.join(work_dir, f"{output_name}.mp3")
         os.rename(decrypted_file, pseudo_mp3_file)
@@ -471,7 +467,6 @@ async def process_drm(client: Client, message: Message, state: dict):
         # Pyrogram natively extracts audio metadata including duration perfectly.
         await message.reply_audio(
             audio=pseudo_mp3_file,
-            file_name=f"{output_name}.mp3",
             caption=f"<b>{output_name}.mp3</b> ({file_size} MB) | {quality}",
         )
 
