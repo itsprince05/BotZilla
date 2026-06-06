@@ -606,12 +606,13 @@ async def cmd_start(client: Client, message: Message):
         "/status — Check tools\n"
         "/update — Pull and restart\n"
         "/cancel — Cancel operation",
+        quote=False,
     )
 
 @app.on_message(filters.command(["dash", "dashboard"]))
 @owner_only
 async def cmd_dash(client: Client, message: Message):
-    status_msg = await message.reply_text("Generating new dashboard access...")
+    status_msg = await message.reply_text("Generating new dashboard access...", quote=False)
     restart_tunnel()
     
     for _ in range(30):
@@ -634,6 +635,7 @@ async def cmd_status(client: Client, message: Message):
         "<b>Status</b>\n\n"
         f"mp4decrypt: {'Ready' if has_mp4decrypt else 'Missing'}\n"
         f"Path: <code>{MP4DECRYPT_PATH}</code>\n\n",
+        quote=False,
     )
 
 
@@ -642,14 +644,14 @@ async def cmd_status(client: Client, message: Message):
 async def cmd_cancel(client: Client, message: Message):
     if message.from_user.id in user_states:
         del user_states[message.from_user.id]
-    await message.reply_text("Cancelled.")
+    await message.reply_text("Cancelled.", quote=False)
 
 
 @app.on_message(filters.command("update"))
 @owner_only
 async def cmd_update(client: Client, message: Message):
     chat_id = message.chat.id
-    status_msg = await message.reply_text("Updating Bot...")
+    status_msg = await message.reply_text("Updating Bot...", quote=False)
 
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -701,6 +703,7 @@ async def drm_start(client: Client, message: Message):
             "<b>mp4decrypt not found</b>\n"
             f"Expected: <code>{MP4DECRYPT_PATH}</code>\n\n"
             "Download from: https://www.bento4.com/downloads/",
+            quote=False,
         )
         return
 
@@ -708,6 +711,7 @@ async def drm_start(client: Client, message: Message):
     await message.reply_text(
         "<b>Step 1/2 — MPD URL</b>\n\n"
         "Send the MPD manifest URL.",
+        quote=False,
     )
 
 
@@ -724,10 +728,10 @@ async def handle_text(client: Client, message: Message):
     if step == "ASK_MPD":
         mpd_url = message.text.strip()
         if not mpd_url.startswith("http"):
-            await message.reply_text("Invalid URL. Send a valid MPD URL starting with http/https.")
+            await message.reply_text("Invalid URL. Send a valid MPD URL starting with http/https.", quote=False)
             return
 
-        status_msg = await message.reply_text("Fetching MPD manifest...")
+        status_msg = await message.reply_text("Fetching MPD manifest...", quote=False)
         mpd_content = await fetch_mpd(mpd_url)
         
         if not mpd_content:
@@ -766,7 +770,7 @@ async def handle_text(client: Client, message: Message):
         keys = parse_keys_input(keys_text)
 
         if not keys:
-            await message.reply_text("No valid keys found.\nSend in format: <code>kid:key</code>")
+            await message.reply_text("No valid keys found.\nSend in format: <code>kid:key</code>", quote=False)
             return
 
         state["keys"] = keys
@@ -792,6 +796,7 @@ async def process_drm(client: Client, message: Message, state: dict):
         f"Quality: <code>{quality}</code>\n"
         f"Output: <code>{output_name}</code>\n\n"
         "Processing...",
+        quote=False,
     )
 
     work_dir = tempfile.mkdtemp(prefix="drm_")
