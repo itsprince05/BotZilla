@@ -13,6 +13,7 @@ import time
 import xml.etree.ElementTree as ET
 
 import aiohttp
+from mutagen.mp4 import MP4
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 from dotenv import load_dotenv
@@ -84,27 +85,9 @@ async def download_file(url: str, output_path: str, status_msg: Message) -> bool
                     await status_msg.edit_text(f"Download failed — HTTP {response.status}")
                     return False
 
-                total = int(response.headers.get("content-length", 0))
-                downloaded = 0
-                last_percent = -1
-
                 with open(output_path, "wb") as f:
-                    async for chunk in response.content.iter_chunked(1048576):
+                    async for chunk in response.content.iter_chunked(262144):
                         f.write(chunk)
-                        downloaded += len(chunk)
-
-                        if total > 0:
-                            percent = int((downloaded / total) * 100)
-                            if percent != last_percent and percent % 25 == 0:
-                                last_percent = percent
-                                size_mb = round(downloaded / 1048576, 2)
-                                total_mb = round(total / 1048576, 2)
-                                try:
-                                    await status_msg.edit_text(
-                                        f"Downloading — {percent}% ({size_mb}/{total_mb} MB)"
-                                    )
-                                except Exception:
-                                    pass
 
         size_mb = round(os.path.getsize(output_path) / 1048576, 2)
         await status_msg.edit_text(f"Downloaded — {size_mb} MB")
@@ -457,22 +440,25 @@ async def process_drm(client: Client, message: Message, state: dict):
         decrypted_size = round(os.path.getsize(decrypted_file) / 1048576, 2)
         await status_msg.edit_text(f"Decrypted — {decrypted_size} MB")
         
-        pseudo_mp3_file = os.path.join(work_dir, f"{output_name}.mp3")
-        os.rename(decrypted_file, pseudo_mp3_file)
+        await status_msg.edit_text("[4/5] Uploading as Audio...")
 
-        await status_msg.edit_text("[4/5] Uploading as Audio (.mp3 extension)...")
+        audio_duration = 0
+        try:
+            audio_info = MP4(decrypted_file)
+            audio_duration = int(audio_info.info.length)
+        except Exception as ex:
+            logger.warning(f"Could not extract duration: {ex}")
 
-        file_size = round(os.path.getsize(pseudo_mp3_file) / 1048576, 2)
-        
-        # Pyrogram natively extracts audio metadata including duration perfectly.
+        # Upload using extracted duration
         await message.reply_audio(
-            audio=pseudo_mp3_file,
-            caption=f"<b>{output_name}.mp3</b> ({file_size} MB) | {quality}",
+            audio=decrypted_file,
+            duration=audio_duration,
+            caption=f"<b>{output_name}.m4a</b> ({decrypted_size} MB) | {quality}",
         )
 
         result_text = (
             f"<b>Done</b>\n\n"
-            f"{output_name}.mp3 — {file_size} MB\n"
+            f"{output_name}.m4a — {decrypted_size} MB\n"
             f"\nQuality: {quality} | Keys: {len(keys)}"
         )
 
