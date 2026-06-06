@@ -1,0 +1,6 @@
+.env
+*.m4a
+*.mp3
+*.mp4
+restart.flag
+__pycache__/
