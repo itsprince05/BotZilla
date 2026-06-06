@@ -287,12 +287,15 @@ def get_free_port():
         s.bind(('', 0))
         return s.getsockname()[1]
 
-def start_cloudflare_tunnel():
-    global tunnel_url, tunnel_process, dashboard_port
-    dashboard_port = get_free_port()
-    
-    # Start flask in thread
-    threading.Thread(target=dashboard.start_flask, args=(dashboard_port,), daemon=True).start()
+def restart_tunnel():
+    global tunnel_process, tunnel_url
+    if tunnel_process:
+        try:
+            tunnel_process.terminate()
+            tunnel_process.kill()
+        except Exception:
+            pass
+    tunnel_url = None
     
     cf_path = os.path.join(BOT_DIR, "cloudflared.exe" if os.name == "nt" else "cloudflared")
     if not os.path.exists(cf_path):
@@ -319,6 +322,13 @@ def start_cloudflare_tunnel():
     except Exception as e:
         logger.error(f"Failed to start tunnel: {e}")
 
+def start_cloudflare_tunnel():
+    global dashboard_port
+    dashboard_port = get_free_port()
+    # Start flask in thread
+    threading.Thread(target=dashboard.start_flask, args=(dashboard_port,), daemon=True).start()
+    restart_tunnel()
+
 
 app = Client("drm_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
@@ -340,13 +350,21 @@ async def cmd_start(client: Client, message: Message):
         "/cancel — Cancel operation",
     )
 
-@app.on_message(filters.command("dash"))
+@app.on_message(filters.command(["dash", "dashboard"]))
 @owner_only
 async def cmd_dash(client: Client, message: Message):
+    status_msg = await message.reply_text("Generating new Dashboard URL...")
+    restart_tunnel()
+    
+    for _ in range(30):
+        if tunnel_url:
+            break
+        await asyncio.sleep(1)
+        
     if tunnel_url:
-        await message.reply_text(f"<b>Dashboard URL:</b>\n{tunnel_url}")
+        await status_msg.edit_text(f"<b>Dashboard url:</b>\n{tunnel_url}")
     else:
-        await message.reply_text("Dashboard URL is not ready yet. Try again in a few seconds.")
+        await status_msg.edit_text("Failed to generate Dashboard URL.")
 
 
 @app.on_message(filters.command("status"))
@@ -672,7 +690,13 @@ async def main():
             os.remove(RESTART_FLAG)
             chat_id = data.get("chat_id")
             if chat_id:
-                await app.send_message(chat_id=chat_id, text="Restarted.")
+                for _ in range(30):
+                    if tunnel_url:
+                        break
+                    await asyncio.sleep(1)
+                
+                msg_text = f"<b>Bot is running...</b>\n\n{tunnel_url if tunnel_url else 'Dashboard failed to start.'}"
+                await app.send_message(chat_id=chat_id, text=msg_text)
         except Exception as e:
             logger.error(f"Post-restart notification failed: {e}")
 
