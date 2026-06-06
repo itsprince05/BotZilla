@@ -60,6 +60,8 @@ def owner_only(func):
 
 def check_tool(path: str) -> bool:
     if os.path.isfile(path):
+        if os.name != "nt" and not os.access(path, os.X_OK):
+            os.chmod(path, 0o755)
         return True
     try:
         subprocess.run(
@@ -311,9 +313,11 @@ async def receive_keys(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [
             InlineKeyboardButton("64k", callback_data="q_64k"),
             InlineKeyboardButton("128k", callback_data="q_128k"),
-            InlineKeyboardButton("256k", callback_data="q_256k"),
         ],
-        [InlineKeyboardButton(f"Default ({DEFAULT_QUALITY})", callback_data=f"q_{DEFAULT_QUALITY}")],
+        [
+            InlineKeyboardButton("256k", callback_data="q_256k"),
+            InlineKeyboardButton(f"Default ({DEFAULT_QUALITY})", callback_data=f"q_{DEFAULT_QUALITY}"),
+        ],
     ]
 
     await update.message.reply_text(
