@@ -11,6 +11,9 @@ import tempfile
 import ssl
 import time
 import xml.etree.ElementTree as ET
+import socket
+import threading
+import platform
 
 import aiohttp
 from mutagen.mp4 import MP4
@@ -41,9 +44,16 @@ SSL_CTX = ssl.create_default_context()
 SSL_CTX.check_hostname = False
 SSL_CTX.verify_mode = ssl.CERT_NONE
 
+# Cloudflare Tunnel variables
+tunnel_url = None
+tunnel_process = None
+dashboard_port = 5000
+
 # Conversation state
 # {user_id: {"mpd_url": str, "mpd_content": str}}
 user_states = {}
+
+import dashboard
 
 
 def owner_only(func):
@@ -252,6 +262,63 @@ async def ensure_tools():
         except Exception as e:
             logger.error(f"Error downloading mp4decrypt: {e}")
 
+    # Ensure cloudflared
+    cf_path = os.path.join(BOT_DIR, "cloudflared.exe" if os.name == "nt" else "cloudflared")
+    if not os.path.exists(cf_path):
+        logger.info("cloudflared not found. Downloading...")
+        is_windows = os.name == "nt"
+        if is_windows:
+            url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
+        else:
+            url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
+        try:
+            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as session:
+                async with session.get(url) as resp:
+                    if resp.status == 200:
+                        with open(cf_path, "wb") as f:
+                            f.write(await resp.read())
+                        if not is_windows:
+                            os.chmod(cf_path, 0o755)
+        except Exception as e:
+            logger.error(f"Error downloading cloudflared: {e}")
+
+def get_free_port():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('', 0))
+        return s.getsockname()[1]
+
+def start_cloudflare_tunnel():
+    global tunnel_url, tunnel_process, dashboard_port
+    dashboard_port = get_free_port()
+    
+    # Start flask in thread
+    threading.Thread(target=dashboard.start_flask, args=(dashboard_port,), daemon=True).start()
+    
+    cf_path = os.path.join(BOT_DIR, "cloudflared.exe" if os.name == "nt" else "cloudflared")
+    if not os.path.exists(cf_path):
+        return
+
+    def read_stream(stream):
+        global tunnel_url
+        for line in iter(stream.readline, b''):
+            decoded = line.decode('utf-8', errors='ignore').strip()
+            if ".trycloudflare.com" in decoded and not tunnel_url:
+                match = re.search(r"https://[a-zA-Z0-9\-]+\.trycloudflare\.com", decoded)
+                if match:
+                    tunnel_url = match.group(0)
+                    logger.info(f"Dashboard available at: {tunnel_url}")
+
+    try:
+        tunnel_process = subprocess.Popen(
+            [cf_path, "tunnel", "--url", f"http://127.0.0.1:{dashboard_port}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        threading.Thread(target=read_stream, args=(tunnel_process.stdout,), daemon=True).start()
+        threading.Thread(target=read_stream, args=(tunnel_process.stderr,), daemon=True).start()
+    except Exception as e:
+        logger.error(f"Failed to start tunnel: {e}")
+
 
 app = Client("drm_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
@@ -263,13 +330,23 @@ async def cmd_start(client: Client, message: Message):
 
     await message.reply_text(
         "<b>Widevine DRM Downloader (Pyrogram)</b>\n\n"
-        f"mp4decrypt: {'Ready' if has_mp4decrypt else 'Not Found'}\n\n"
+        f"mp4decrypt: {'Ready' if has_mp4decrypt else 'Not Found'}\n"
+        f"Dashboard: {tunnel_url if tunnel_url else 'Starting...'}\n\n"
         "<b>Commands</b>\n"
         "/drm — Start download\n"
+        "/dash — Show Dashboard URL\n"
         "/status — Check tools\n"
         "/update — Pull and restart\n"
         "/cancel — Cancel operation",
     )
+
+@app.on_message(filters.command("dash"))
+@owner_only
+async def cmd_dash(client: Client, message: Message):
+    if tunnel_url:
+        await message.reply_text(f"<b>Dashboard URL:</b>\n{tunnel_url}")
+    else:
+        await message.reply_text("Dashboard URL is not ready yet. Try again in a few seconds.")
 
 
 @app.on_message(filters.command("status"))
@@ -386,15 +463,30 @@ async def handle_text(client: Client, message: Message):
 
         state["mpd_url"] = mpd_url
         state["mpd_content"] = mpd_content
-        state["step"] = "ASK_KEYS"
         
-        await status_msg.edit_text(
-            "<b>Step 2/2 — Decryption Keys</b>\n\n"
-            "Send KID:KEY pairs, one per line.\n\n"
-            "Format:\n"
-            "<code>kid1:key1\n"
-            "kid2:key2</code>",
-        )
+        shows = dashboard.get_shows()
+        
+        if not shows:
+            state["step"] = "ASK_KEYS"
+            await status_msg.edit_text(
+                "<b>Step 2/2 — Decryption Keys</b>\n\n"
+                "Send KID:KEY pairs, one per line.\n\n"
+                "Format:\n"
+                "<code>kid1:key1\n"
+                "kid2:key2</code>",
+            )
+        else:
+            state["step"] = "SELECT_SHOW"
+            keyboard = []
+            for show_name in shows.keys():
+                keyboard.append([InlineKeyboardButton(show_name, callback_data=f"show_{show_name}")])
+            keyboard.append([InlineKeyboardButton("✍️ Enter Manual Key", callback_data="manual_key")])
+            
+            await status_msg.edit_text(
+                "<b>Step 2/2 — Select Show Key</b>\n\n"
+                "Select a saved show from the dashboard or enter keys manually.",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
         
     elif step == "ASK_KEYS":
         keys_text = message.text.strip()
@@ -518,10 +610,55 @@ async def process_drm(client: Client, message: Message, state: dict):
             pass
 
 
+@app.on_callback_query()
+@owner_only
+async def handle_callback(client: Client, query):
+    user_id = query.from_user.id
+    if user_id not in user_states:
+        await query.answer("Session expired.", show_alert=True)
+        return
+        
+    state = user_states[user_id]
+    if state.get("step") != "SELECT_SHOW":
+        await query.answer("Invalid step.", show_alert=True)
+        return
+        
+    data = query.data
+    if data == "manual_key":
+        state["step"] = "ASK_KEYS"
+        await query.edit_message_text(
+            "<b>Step 2/2 — Decryption Keys</b>\n\n"
+            "Send KID:KEY pairs, one per line.\n\n"
+            "Format:\n"
+            "<code>kid1:key1\n"
+            "kid2:key2</code>",
+        )
+    elif data.startswith("show_"):
+        show_name = data.split("show_", 1)[1]
+        shows = dashboard.get_shows()
+        if show_name in shows:
+            keys = shows[show_name]["keys"]
+            if not keys:
+                await query.answer("Selected show has no keys saved!", show_alert=True)
+                return
+            
+            await query.edit_message_text(f"Selected: <b>{show_name}</b>\nStarting decryption...")
+            
+            mpd_url = state["mpd_url"]
+            mpd_content = state["mpd_content"]
+            del user_states[user_id]
+            
+            await process_drm(client, query.message, mpd_url, mpd_content, keys)
+        else:
+            await query.answer("Show not found in dashboard!", show_alert=True)
+
 async def main():
     if not BOT_TOKEN or not API_ID or not API_HASH:
         logger.error("BOT_TOKEN, API_ID, or API_HASH not found in .env file!")
         return
+
+    # Start Dashboard tunnel
+    start_cloudflare_tunnel()
 
     await ensure_tools()
     
