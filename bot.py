@@ -211,6 +211,20 @@ async def run_decrypt(mp4decrypt_path: str, keys: dict, input_file: str, output_
         return False, str(e)
 
 
+async def fix_m4a_duration(input_file: str, output_file: str) -> bool:
+    cmd = ["ffmpeg", "-y", "-i", input_file, "-c", "copy", output_file]
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await proc.communicate()
+        return proc.returncode == 0
+    except Exception:
+        return False
+
+
 async def ensure_tools():
     if not os.path.exists(MP4DECRYPT_PATH):
         logger.info("mp4decrypt not found. Downloading...")
@@ -455,19 +469,29 @@ async def process_drm(client: Client, message: Message, state: dict):
         decrypted_size = round(os.path.getsize(decrypted_file) / 1048576, 2)
         await status_msg.edit_text(f"Decrypted — {decrypted_size} MB")
         
-        await status_msg.edit_text("[4/5] Uploading as Audio...")
+        fixed_file = os.path.join(work_dir, f"{output_name}_fixed.m4a")
+        await status_msg.edit_text("[4/5] Fixing stream headers...")
+        
+        # Extremely fast 0.5s remux to fix DASH fmp4 structure (adds moov atom with duration)
+        await fix_m4a_duration(decrypted_file, fixed_file)
+        
+        if not os.path.exists(fixed_file):
+            fixed_file = decrypted_file
+
+        await status_msg.edit_text("[5/5] Uploading as Audio...")
 
         audio_duration = 0
         try:
-            audio_info = MP4(decrypted_file)
+            audio_info = MP4(fixed_file)
             audio_duration = int(audio_info.info.length)
         except Exception as ex:
             logger.warning(f"Could not extract duration: {ex}")
 
         # Upload using extracted duration
         await message.reply_audio(
-            audio=decrypted_file,
+            audio=fixed_file,
             duration=audio_duration,
+            file_name=f"{output_name}.m4a",
             caption=f"<b>{output_name}.m4a</b> ({decrypted_size} MB) | {quality}",
         )
 
