@@ -13,6 +13,7 @@ import time
 import xml.etree.ElementTree as ET
 
 import aiohttp
+from mutagen.mp4 import MP4
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -402,9 +403,18 @@ async def receive_keys(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_msg.edit_text("Uploading as Audio...")
 
         m4a_size = round(os.path.getsize(decrypted_file) / 1048576, 2)
+        
+        audio_duration = 0
+        try:
+            audio_info = MP4(decrypted_file)
+            audio_duration = int(audio_info.info.length)
+        except Exception as ex:
+            logger.warning(f"Could not extract duration: {ex}")
+
         with open(decrypted_file, "rb") as f:
             await update.message.reply_audio(
                 audio=f,
+                duration=audio_duration,
                 filename=f"{output_name}.m4a",
                 caption=f"<b>{output_name}.m4a</b> ({m4a_size} MB) | {quality}",
                 parse_mode="HTML",
