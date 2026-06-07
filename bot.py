@@ -199,7 +199,8 @@ HTML_TEMPLATE = """
         }
 
         function loadBuyers() {
-            fetch('/api/buyers').then(r => r.json()).then(buyers => {
+            Promise.all([fetch('/api/buyers').then(r => r.json()), fetch('/api/users').then(r => r.json())])
+            .then(([buyers, users]) => {
                 const container = document.getElementById('buyersTable');
                 container.innerHTML = '';
                 Object.entries(buyers).forEach(([uid, data]) => {
@@ -208,11 +209,21 @@ HTML_TEMPLATE = """
                         `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>` : 
                         `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
                     
+                    const userData = users[uid] || {};
+                    const name = data.name || userData.name || 'Unknown';
+                    const username = userData.username ? ` @${userData.username}` : '';
+                    const initial = name.charAt(0).toUpperCase() || '?';
+                    
                     container.innerHTML += `
                         <div class="list-card">
-                            <div style="flex: 1; overflow: hidden;">
-                                <div class="list-title">${data.name || 'Unknown'}</div>
-                                <div class="list-subtitle">ID: ${uid}</div>
+                            <div style="display: flex; align-items: center; gap: 15px; flex: 1; overflow: hidden;">
+                                <div style="width: 40px; height: 40px; border-radius: 50%; background: #2481cc; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0;">
+                                    ${initial}
+                                </div>
+                                <div style="flex: 1; overflow: hidden;">
+                                    <div class="list-title">${name}</div>
+                                    <div class="list-subtitle">ID: ${uid}${username}</div>
+                                </div>
                             </div>
                             <div class="btn-group">
                                 <div class="icon-btn action-btn ${isPaused ? 'paused' : ''}" onclick="toggleBuyer('${uid}')" title="Toggle Access">
@@ -229,12 +240,21 @@ HTML_TEMPLATE = """
             fetch('/api/users').then(r => r.json()).then(users => {
                 const container = document.getElementById('usersTable');
                 container.innerHTML = '';
-                Object.entries(users).forEach(([uid, name]) => {
+                Object.entries(users).forEach(([uid, userData]) => {
+                    const name = userData.name || 'Unknown';
+                    const username = userData.username ? ` @${userData.username}` : '';
+                    const initial = name.charAt(0).toUpperCase() || '?';
+                    
                     container.innerHTML += `
                         <div class="list-card">
-                            <div style="flex: 1; overflow: hidden;">
-                                <div class="list-title">${name}</div>
-                                <div class="list-subtitle">ID: ${uid}</div>
+                            <div style="display: flex; align-items: center; gap: 15px; flex: 1; overflow: hidden;">
+                                <div style="width: 40px; height: 40px; border-radius: 50%; background: #2481cc; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0;">
+                                    ${initial}
+                                </div>
+                                <div style="flex: 1; overflow: hidden;">
+                                    <div class="list-title">${name}</div>
+                                    <div class="list-subtitle">ID: ${uid}${username}</div>
+                                </div>
                             </div>
                         </div>
                     `;
@@ -313,6 +333,8 @@ HTML_TEMPLATE = """
         }
 
         loadShows();
+        loadBuyers();
+        loadUsers();
     </script>
 </body>
 </html>
@@ -352,7 +374,11 @@ def get_all_users():
         return {}
     with open(ALL_USERS_FILE, 'r') as f:
         try:
-            return json.load(f)
+            data = json.load(f)
+            for k, v in data.items():
+                if isinstance(v, str):
+                    data[k] = {"name": v, "username": None}
+            return data
         except:
             return {}
 
@@ -744,29 +770,45 @@ async def log_user(client: Client, message: Message):
         if getattr(user, "last_name", None):
             name += f" {user.last_name}"
         name = name.strip() or "Unknown"
+        username = getattr(user, "username", None)
         
-        if uid_str not in all_users or all_users[uid_str] != name:
-            all_users[uid_str] = name
+        current = all_users.get(uid_str, {})
+        if not isinstance(current, dict):
+            current = {}
+            
+        if current.get("name") != name or current.get("username") != username:
+            all_users[uid_str] = {"name": name, "username": username}
             save_all_users(all_users)
 
 
 @app.on_message(filters.command("start"))
 @authorized_only
 async def cmd_start(client: Client, message: Message):
-    has_mp4decrypt = check_tool(MP4DECRYPT_PATH)
-
-    await message.reply_text(
-        "<b>Widevine DRM Downloader (Pyrogram)</b>\n\n"
-        f"mp4decrypt: {'Ready' if has_mp4decrypt else 'Not Found'}\n"
-        f"Dashboard: {tunnel_url if tunnel_url else 'Starting...'}\n\n"
-        "<b>Commands</b>\n"
-        "/drm — Start download\n"
-        "/dash — Show Dashboard URL\n"
-        "/status — Check tools\n"
-        "/update — Pull and restart\n"
-        "/cancel — Cancel operation",
-        quote=False,
-    )
+    is_owner = OWNER_IDS and message.from_user.id in OWNER_IDS
+    if is_owner:
+        has_mp4decrypt = check_tool(MP4DECRYPT_PATH)
+        await message.reply_text(
+            "<b>Widevine DRM Downloader (Pyrogram)</b>\n\n"
+            f"mp4decrypt: {'Ready' if has_mp4decrypt else 'Not Found'}\n"
+            f"Dashboard: {tunnel_url if tunnel_url else 'Starting...'}\n\n"
+            "<b>Commands</b>\n"
+            "/drm — Start download\n"
+            "/dash — Show Dashboard URL\n"
+            "/status — Check tools\n"
+            "/update — Pull and restart\n"
+            "/allow — Allow user\n"
+            "/remove — Remove user\n"
+            "/cancel — Cancel operation",
+            quote=False,
+        )
+    else:
+        await message.reply_text(
+            "<b>Widevine DRM Downloader</b>\n\n"
+            "<b>Commands</b>\n"
+            "/drm — Start download\n"
+            "/cancel — Cancel operation",
+            quote=False,
+        )
 
 @app.on_message(filters.command(["dash", "dashboard"]))
 @owner_only
@@ -1001,7 +1043,7 @@ async def drm_start(client: Client, message: Message):
         )
         return
 
-    user_states[message.from_user.id] = {"step": "ASK_MPD"}
+    user_states[message.from_user.id] = {"step": "ASK_MPD", "user_id": message.from_user.id}
     await message.reply_text(
         "<b>Step 1/2 — MPD URL</b>\n\n"
         "Send the MPD manifest URL.",
@@ -1076,12 +1118,17 @@ async def process_drm(client: Client, message: Message, state: dict):
     keys = state["keys"]
     mpd_url = state["mpd_url"]
     mpd_content = state["mpd_content"]
+    user_id = state.get("user_id")
 
     qualities = get_mpd_qualities(mpd_content)
     quality = "128k" if "128k" in qualities else (qualities[0] if qualities else "128k")
     output_name = str(int(time.time()))
 
-    keys_preview = "\n".join([f"  <code>{kid}:{key}</code>" for kid, key in keys.items()])
+    is_owner = OWNER_IDS and user_id in OWNER_IDS
+    if is_owner:
+        keys_preview = "\n".join([f"  <code>{kid}:{key}</code>" for kid, key in keys.items()])
+    else:
+        keys_preview = "  <i>[Hidden for security]</i>"
     
     status_msg = await message.reply_text(
         "<b>Starting</b>\n\n"
@@ -1216,11 +1263,10 @@ async def handle_callback(client: Client, query):
             
             await query.edit_message_text(f"Selected: <b>{show_name}</b>\nStarting decryption...")
             
-            mpd_url = state["mpd_url"]
-            mpd_content = state["mpd_content"]
+            state["keys"] = keys
             del user_states[user_id]
             
-            await process_drm(client, query.message, mpd_url, mpd_content, keys)
+            await process_drm(client, query.message, state)
         else:
             await query.answer("Show not found in dashboard!", show_alert=True)
 
