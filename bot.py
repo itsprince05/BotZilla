@@ -148,7 +148,7 @@ HTML_TEMPLATE = """
                 <h3>Add New Show</h3>
                 <form id="addShowForm" style="display: flex; flex-direction: column; gap: 10px;">
                     <textarea id="showName" rows="1" required placeholder="Show Name" style="resize: none; overflow-y: auto; max-height: 90px; box-sizing: border-box;" oninput="this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 90) + 'px'"></textarea>
-                    <input type="text" id="showId" placeholder="Show ID">
+                    <input type="text" id="showId" placeholder="Show ID" required>
                     <textarea id="decryptionKey" rows="4" required placeholder="Decryption Keys" style="resize: none;"></textarea>
                     <button type="submit" class="primary-btn">Save Show</button>
                 </form>
@@ -210,13 +210,15 @@ HTML_TEMPLATE = """
                 const container = document.getElementById('showsTable');
                 container.innerHTML = '';
                 Object.entries(shows).forEach(([name, data]) => {
+                    const count = data.allowed_count || 0;
                     container.innerHTML += `
-                        <div class="list-card">
+                        <div class="list-card" style="cursor: pointer;" onclick="window.location.href='/show/${encodeURIComponent(name)}'">
                             <div style="flex: 1; overflow: hidden;">
                                 <div class="list-title">${name}</div>
+                                <div style="font-size: 13px; color: #666; margin-top: 4px;">${count} allowed users</div>
                             </div>
                             <div class="btn-group">
-                                <div class="icon-btn delete-btn" onclick="showDeletePopup('${name}')">
+                                <div class="icon-btn delete-btn" onclick="event.stopPropagation(); showDeletePopup('${name}')">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                                 </div>
                             </div>
@@ -499,11 +501,30 @@ USER_SHOWS_TEMPLATE = """
             }).then(r => r.json()).then(res => {
                 btn.disabled = false;
                 if(res.success) {
-                    btn.innerHTML = 'Updated';
+                    btn.innerHTML = 'Updated!';
                     btn.style.backgroundColor = '#2b8a3e';
+                    
+                    const allowedList = res.shows || [];
+                    const allowedTab = document.querySelector('#allowed-shows-tab .item-list');
+                    if (allowedList.length === 0) {
+                        allowedTab.innerHTML = '<div style="padding:10px;text-align:center;color:#666;">0 allowed shows</div>';
+                    } else {
+                        allowedTab.innerHTML = allowedList.map((show, index) => `
+                            <div class="list-card" style="cursor: pointer;" onclick="const cb = document.getElementById('cb_allowed_dyn_${index}'); cb.checked = !cb.checked; syncCb(cb.value, cb.checked);">
+                                <div style="flex: 1; overflow: hidden;">
+                                    <div class="list-title">${show}</div>
+                                </div>
+                                <div class="btn-group" onclick="event.stopPropagation()">
+                                    <input type="checkbox" id="cb_allowed_dyn_${index}" class="checkbox show-checkbox" value="${show}" checked onclick="event.stopPropagation()" onchange="syncCb(this.value, this.checked)">
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                    
                     setTimeout(() => {
-                        window.location.reload();
-                    }, 1000);
+                        btn.innerHTML = 'Update';
+                        btn.style.backgroundColor = '#2481cc';
+                    }, 2000);
                 } else {
                     btn.innerHTML = 'Update';
                     alert('Failed to update allowed shows');
@@ -512,6 +533,107 @@ USER_SHOWS_TEMPLATE = """
                 btn.disabled = false;
                 btn.innerHTML = 'Update';
                 alert('Error updating shows');
+            });
+        }
+    </script>
+</body>
+</html>
+"""
+
+SHOW_USERS_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ show_name }} - Users</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Outfit', sans-serif; background-color: #f0f2f5; margin: 0; padding: 0; color: #1c1e21; -webkit-user-select: none; user-select: none; }
+        .action-bar { position: sticky; top: 0; z-index: 100; box-sizing: border-box; height: 48px; background: #2481cc; color: white; padding: 0 10px; gap: 10px; display: flex; align-items: center; }
+        .navbar-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: white; cursor: pointer; }
+        .navbar-title { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
+        .container { max-width: 800px; margin: 0 auto; padding: 15px; padding-bottom: 80px; }
+        .list-card { background: #ffffff; border-radius: 10px; padding: 10px; border: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
+        .list-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
+        .list-subtitle { font-size: 13px; color: #666; margin-top: 5px; }
+        .item-list { display: flex; flex-direction: column; gap: 10px; }
+        .primary-btn { width: 100%; padding: 12px; background: #2481cc; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
+        .primary-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+        .btn-group { display: flex; gap: 10px; }
+        .checkbox { width: 20px; height: 20px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="action-bar">
+        <div class="navbar-icon" onclick="window.location.href='/'">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-left-icon lucide-arrow-left"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+        </div>
+        <div class="navbar-title">{{ show_name }}</div>
+    </div>
+    
+    <div class="container">
+        <div class="item-list" id="usersList">
+            {% for buyer_id, buyer_data in buyers.items() %}
+            <div class="list-card" style="cursor: pointer;" onclick="const cb = document.getElementById('cb_{{ buyer_id }}'); cb.checked = !cb.checked; syncCb('{{ buyer_id }}', cb.checked);">
+                <div style="flex: 1; overflow: hidden;">
+                    <div class="list-title">{{ buyer_data.name or buyer_id }}</div>
+                    <div class="list-subtitle">{{ buyer_id }}{% if buyer_data.username %} @{{ buyer_data.username }}{% endif %}</div>
+                </div>
+                <div class="btn-group" onclick="event.stopPropagation()">
+                    <input type="checkbox" id="cb_{{ buyer_id }}" class="checkbox user-checkbox" value="{{ buyer_id }}" {% if show_name in buyer_data.allowed_shows|default([]) %}checked{% endif %} onclick="event.stopPropagation()" onchange="syncCb(this.value, this.checked)">
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div style="position: fixed; bottom: 0; left: 0; width: 100%; background: #ffffff; border-top: 1px solid #e0e0e0; padding: 15px; box-sizing: border-box; display: flex; justify-content: center; z-index: 1000;">
+        <div style="width: 100%; max-width: 800px;">
+            <button id="updateBtn" class="primary-btn" onclick="updateUsers()">Update</button>
+        </div>
+    </div>
+
+    <script>
+        function syncCb(val, checked) {
+            document.querySelectorAll('.user-checkbox').forEach(cb => {
+                if (cb.value === val) cb.checked = checked;
+            });
+        }
+
+        function updateUsers() {
+            const btn = document.getElementById('updateBtn');
+            btn.disabled = true;
+            btn.innerHTML = 'Updating...';
+            
+            const checkboxes = document.querySelectorAll('.user-checkbox');
+            let allowedUsers = [];
+            checkboxes.forEach(cb => {
+                if (cb.checked) allowedUsers.push(cb.value);
+            });
+            allowedUsers = [...new Set(allowedUsers)];
+            
+            fetch('/api/shows/{{ show_name|urlencode }}/users', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(allowedUsers)
+            }).then(r => r.json()).then(res => {
+                btn.disabled = false;
+                if(res.success) {
+                    btn.innerHTML = 'Updated!';
+                    btn.style.backgroundColor = '#2b8a3e';
+                    setTimeout(() => {
+                        btn.innerHTML = 'Update';
+                        btn.style.backgroundColor = '#2481cc';
+                    }, 2000);
+                } else {
+                    btn.innerHTML = 'Update';
+                    alert('Failed to update access');
+                }
+            }).catch(e => {
+                btn.disabled = false;
+                btn.innerHTML = 'Update';
+                alert('Error updating access');
             });
         }
     </script>
@@ -607,24 +729,36 @@ def user_page(userid):
     
     return render_template_string(USER_SHOWS_TEMPLATE, userid=userid, name=name, allowed_shows=allowed_shows, all_shows=list(shows.keys()))
 
+@flask_app.route('/show/<name>')
+def show_page(name):
+    buyers = get_allowed_users()
+    owner_str_ids = [str(x) for x in OWNER_IDS]
+    filtered_buyers = {k: v for k, v in buyers.items() if k not in owner_str_ids}
+    
+    return render_template_string(SHOW_USERS_TEMPLATE, show_name=name, buyers=filtered_buyers)
+
 @flask_app.route('/api/shows', methods=['GET'])
 def api_get_shows():
     shows = get_shows()
-    sanitized = {name: {} for name in shows.keys()}
+    buyers = get_allowed_users()
+    sanitized = {name: {"allowed_count": sum(1 for b in buyers.values() if name in b.get("allowed_shows", []))} for name in shows.keys()}
     return jsonify(sanitized)
 
 @flask_app.route('/api/shows', methods=['POST'])
 def api_add_show():
     data = request.json
     name = data.get('name')
-    if not name:
-        return jsonify({"success": False, "error": "Name required"})
+    show_id = data.get('id')
+    keys_text = data.get('keys_text')
+    
+    if not name or not show_id or not keys_text:
+        return jsonify({"success": False, "error": "All fields are required"})
     
     shows = get_shows()
-    keys_dict = parse_keys_input(data.get('keys_text', ''))
+    keys_dict = parse_keys_input(keys_text)
     
     shows[name] = {
-        "id": data.get('id', ''),
+        "id": show_id,
         "keys": keys_dict
     }
     save_shows(shows)
@@ -636,6 +770,28 @@ def api_delete_show(name):
     if name in shows:
         del shows[name]
         save_shows(shows)
+    return jsonify({"success": True})
+
+@flask_app.route('/api/shows/<name>/users', methods=['POST'])
+def api_update_show_users(name):
+    allowed_users = request.json
+    if allowed_users is None:
+        allowed_users = []
+    
+    buyers = get_allowed_users()
+    
+    for buyer_id, buyer_data in buyers.items():
+        if "allowed_shows" not in buyer_data:
+            buyer_data["allowed_shows"] = []
+            
+        if str(buyer_id) in allowed_users:
+            if name not in buyer_data["allowed_shows"]:
+                buyer_data["allowed_shows"].append(name)
+        else:
+            if name in buyer_data["allowed_shows"]:
+                buyer_data["allowed_shows"].remove(name)
+                
+    save_allowed_users(buyers)
     return jsonify({"success": True})
 
 @flask_app.route('/api/buyers', methods=['GET'])
@@ -655,7 +811,7 @@ def api_update_buyer_shows(userid):
     if userid in allowed:
         allowed[userid]["allowed_shows"] = allowed_shows
         save_allowed_users(allowed)
-        return jsonify({"success": True})
+        return jsonify({"success": True, "shows": allowed_shows})
     return jsonify({"success": False})
 
 @flask_app.route('/api/buyers/<userid>/toggle', methods=['POST'])
