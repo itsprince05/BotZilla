@@ -118,9 +118,15 @@ HTML_TEMPLATE = """
         .checkbox { width: 20px; height: 20px; }
         .user-shows-tab-content { display: none; }
         .user-shows-tab-content.active { display: block; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .lucide-loader { animation: spin 1s linear infinite; }
+        #global-loader { position: fixed; top: 0; left: 0; width: 100%; height: 100vh; background: #f0f2f5; display: flex; align-items: center; justify-content: center; z-index: 99999; }
     </style>
 </head>
 <body>
+    <div id="global-loader">
+        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2481cc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-loader-icon lucide-loader"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg>
+    </div>
     <div id="main-page">
         <div class="action-bar">
             <div class="navbar-icon">
@@ -183,7 +189,7 @@ HTML_TEMPLATE = """
             </div>
         </div>
         <div style="position: fixed; bottom: 0; left: 0; width: 100%; padding: 15px; background: #f0f2f5; box-sizing: border-box;">
-            <button onclick="updateUserShows()" class="primary-btn">Update</button>
+            <button id="updateShowsBtn" onclick="updateUserShows()" class="primary-btn">Update</button>
         </div>
     </div>
 
@@ -200,10 +206,20 @@ HTML_TEMPLATE = """
     </div>
 
     <script>
+        let initialLoadsCompleted = 0;
+        function checkGlobalLoad() {
+            initialLoadsCompleted++;
+            if(initialLoadsCompleted >= 3) {
+                const loader = document.getElementById('global-loader');
+                if(loader) loader.style.display = 'none';
+            }
+        }
+
         let currentUserShowsUid = null;
 
-        function loadUserShowsData() {
+        function loadUserShowsData(showSpinner = false) {
             if(!currentUserShowsUid) return;
+            if(showSpinner) document.getElementById('global-loader').style.display = 'flex';
             Promise.all([fetch('/api/shows').then(r => r.json()), fetch('/api/buyers').then(r => r.json())])
             .then(([shows, buyers]) => {
                 const buyer = buyers[currentUserShowsUid] || {};
@@ -217,7 +233,9 @@ HTML_TEMPLATE = """
                     allowed.forEach(showName => {
                         allowedList.innerHTML += `
                             <div class="list-card">
-                                <div class="list-title">${showName}</div>
+                                <div style="flex: 1; overflow: hidden;">
+                                    <div class="list-title">${showName}</div>
+                                </div>
                             </div>`;
                     });
                 }
@@ -225,14 +243,38 @@ HTML_TEMPLATE = """
                 const totalList = document.getElementById('totalShowsList');
                 totalList.innerHTML = '';
                 Object.keys(shows).forEach(showName => {
-                    const isChecked = allowed.includes(showName) ? 'checked' : '';
+                    const safeId = encodeURIComponent(showName).replace(/%/g, '_');
+                    const isChecked = allowed.includes(showName);
+                    const checkedSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2481cc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-square"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg>`;
+                    const uncheckedSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>`;
+                    
                     totalList.innerHTML += `
-                        <div class="list-card" style="cursor: pointer;" onclick="const cb = document.getElementById('cb_${showName}'); cb.checked = !cb.checked;">
-                            <div class="list-title">${showName}</div>
-                            <input type="checkbox" id="cb_${showName}" class="checkbox" value="${showName}" ${isChecked} onclick="event.stopPropagation()">
+                        <div class="list-card" style="cursor: pointer;" onclick="toggleShowSelection('${safeId}')">
+                            <div style="flex: 1; overflow: hidden;">
+                                <div class="list-title">${showName}</div>
+                            </div>
+                            <div class="btn-group">
+                                <div class="icon-btn" id="icon_${safeId}" style="background: transparent; padding: 0;">
+                                    ${isChecked ? checkedSvg : uncheckedSvg}
+                                </div>
+                            </div>
+                            <input type="checkbox" id="cb_${safeId}" class="checkbox" value="${showName.replace(/"/g, '&quot;')}" ${isChecked ? 'checked' : ''} style="display:none;">
                         </div>`;
                 });
+            }).finally(() => {
+                if(showSpinner) document.getElementById('global-loader').style.display = 'none';
             });
+        }
+        
+        function toggleShowSelection(safeId) {
+            const cb = document.getElementById('cb_' + safeId);
+            cb.checked = !cb.checked;
+            const iconDiv = document.getElementById('icon_' + safeId);
+            if (cb.checked) {
+                iconDiv.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2481cc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-square"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg>`;
+            } else {
+                iconDiv.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>`;
+            }
         }
         
         function openUserShows(uid, name) {
@@ -246,7 +288,7 @@ HTML_TEMPLATE = """
             document.querySelector('#user-shows-page .user-shows-tab:first-child').classList.add('active');
             document.getElementById('allowed-shows-tab').classList.add('active');
             
-            loadUserShowsData();
+            loadUserShowsData(true);
         }
         
         function closeUserShows() {
@@ -262,11 +304,15 @@ HTML_TEMPLATE = """
             event.currentTarget.classList.add('active');
             document.getElementById(tabId).classList.add('active');
             
-            loadUserShowsData();
+            loadUserShowsData(false);
         }
         
         function updateUserShows() {
             if (!currentUserShowsUid) return;
+            const btn = document.getElementById('updateShowsBtn');
+            btn.disabled = true;
+            btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-loader-icon lucide-loader" style="margin: auto; display: block;"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg>`;
+
             const checkboxes = document.querySelectorAll('#totalShowsList .checkbox');
             const newAllowed = [];
             checkboxes.forEach(cb => {
@@ -278,11 +324,17 @@ HTML_TEMPLATE = """
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(newAllowed)
             }).then(r => r.json()).then(res => {
+                btn.disabled = false;
+                btn.innerHTML = 'Update';
                 if(res.success) {
                     closeUserShows();
                 } else {
                     alert('Failed to update allowed shows');
                 }
+            }).catch(e => {
+                btn.disabled = false;
+                btn.innerHTML = 'Update';
+                alert('Error updating shows');
             });
         }
 
@@ -315,7 +367,7 @@ HTML_TEMPLATE = """
                         </div>
                     `;
                 });
-            });
+            }).finally(() => { if (initialLoadsCompleted < 3) checkGlobalLoad(); });
         }
 
         function loadBuyers() {
@@ -354,10 +406,11 @@ HTML_TEMPLATE = """
                                     ${icon}
                                 </div>
                             </div>
+                            </div>
                         </div>
                     `;
                 });
-            });
+            }).finally(() => { if (initialLoadsCompleted < 3) checkGlobalLoad(); });
         }
 
         function loadUsers() {
@@ -388,7 +441,7 @@ HTML_TEMPLATE = """
                         </div>
                     `;
                 });
-            });
+            }).finally(() => { if (initialLoadsCompleted < 3) checkGlobalLoad(); });
         }
 
         function toggleBuyer(uid) {
