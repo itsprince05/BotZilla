@@ -19,6 +19,7 @@ import aiohttp
 from mutagen.mp4 import MP4
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
+from pyrogram.enums import ChatType
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -65,6 +66,7 @@ SHOWS_FILE = os.path.join(BOT_DIR, "shows.json")
 ALLOWED_USERS_FILE = os.path.join(BOT_DIR, "allowed_users.json")
 ALL_USERS_FILE = os.path.join(BOT_DIR, "all_users.json")
 AVATARS_DIR = os.path.join(BOT_DIR, "avatars")
+ADMINS_FILE = os.path.join(BOT_DIR, "admins.json")
 os.makedirs(AVATARS_DIR, exist_ok=True)
 
 HTML_TEMPLATE = """
@@ -378,6 +380,19 @@ def save_allowed_users(users):
     with open(ALLOWED_USERS_FILE, 'w') as f:
         json.dump(users, f, indent=4)
 
+def get_admins():
+    if not os.path.exists(ADMINS_FILE):
+        return []
+    with open(ADMINS_FILE, 'r') as f:
+        try:
+            return json.load(f)
+        except:
+            return []
+
+def save_admins(admins):
+    with open(ADMINS_FILE, 'w') as f:
+        json.dump(admins, f, indent=4)
+
 def get_all_users():
     if not os.path.exists(ALL_USERS_FILE):
         return {}
@@ -484,6 +499,35 @@ def owner_only(func):
         if not user: return
         user_id = user.id
         if OWNER_IDS and user_id not in OWNER_IDS: return
+        
+        chat = getattr(update, "chat", None)
+        if not chat and hasattr(update, "message") and update.message:
+            chat = update.message.chat
+        if chat:
+            if chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP]: return
+            if ALLOWED_CHATS and chat.id not in ALLOWED_CHATS: return
+            
+        return await func(client, update)
+    return wrapper
+
+def admin_or_owner(func):
+    async def wrapper(client: Client, update):
+        user = getattr(update, "from_user", None)
+        if not user: return
+        user_id = user.id
+        
+        is_owner = OWNER_IDS and user_id in OWNER_IDS
+        is_admin = user_id in get_admins()
+        
+        if not (is_owner or is_admin): return
+        
+        chat = getattr(update, "chat", None)
+        if not chat and hasattr(update, "message") and update.message:
+            chat = update.message.chat
+        if chat:
+            if chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP]: return
+            if ALLOWED_CHATS and chat.id not in ALLOWED_CHATS: return
+                
         return await func(client, update)
     return wrapper
 
@@ -784,6 +828,11 @@ app = Client("drm_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 @app.on_message(group=-1)
 async def log_user(client: Client, message: Message):
+    chat = message.chat
+    if chat and chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
+        if ALLOWED_CHATS and chat.id not in ALLOWED_CHATS:
+            return
+            
     user = getattr(message, "from_user", None)
     if user and user.id:
         all_users = get_all_users()
@@ -829,7 +878,9 @@ async def log_user(client: Client, message: Message):
 @authorized_only
 async def cmd_start(client: Client, message: Message):
     is_owner = OWNER_IDS and message.from_user.id in OWNER_IDS
-    if is_owner:
+    is_admin = message.from_user.id in get_admins()
+    
+    if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP] and (is_owner or is_admin):
         has_mp4decrypt = check_tool(MP4DECRYPT_PATH)
         await message.reply_text(
             "<b>Widevine DRM Downloader (Pyrogram)</b>\n\n"
@@ -838,11 +889,14 @@ async def cmd_start(client: Client, message: Message):
             "<b>Commands</b>\n"
             "/drm — Start download\n"
             "/dash — Show Dashboard URL\n"
-            "/status — Check tools\n"
-            "/update — Pull and restart\n"
             "/allow — Allow user\n"
             "/remove — Remove user\n"
-            "/cancel — Cancel operation",
+            "/cancel — Cancel operation\n\n"
+            "<b>Owner Only</b>\n"
+            "/admin — Add admin\n"
+            "/radmin — Remove admin\n"
+            "/status — Check tools\n"
+            "/update — Pull and restart",
             quote=False,
         )
     else:
@@ -854,8 +908,48 @@ async def cmd_start(client: Client, message: Message):
             quote=False,
         )
 
-@app.on_message(filters.command(["dash", "dashboard"]))
+@app.on_message(filters.command("admin"))
 @owner_only
+async def cmd_admin(client: Client, message: Message):
+    if len(message.command) < 2:
+        await message.reply_text("Usage: /admin userid", quote=False)
+        return
+    try:
+        user_id = int(message.command[1])
+    except ValueError:
+        await message.reply_text("Invalid userid.", quote=False)
+        return
+        
+    admins = get_admins()
+    if user_id not in admins:
+        admins.append(user_id)
+        save_admins(admins)
+        await message.reply_text(f"User {user_id} is now an Admin.", quote=False)
+    else:
+        await message.reply_text(f"User {user_id} is already an Admin.", quote=False)
+
+@app.on_message(filters.command("radmin"))
+@owner_only
+async def cmd_radmin(client: Client, message: Message):
+    if len(message.command) < 2:
+        await message.reply_text("Usage: /radmin userid", quote=False)
+        return
+    try:
+        user_id = int(message.command[1])
+    except ValueError:
+        await message.reply_text("Invalid userid.", quote=False)
+        return
+        
+    admins = get_admins()
+    if user_id in admins:
+        admins.remove(user_id)
+        save_admins(admins)
+        await message.reply_text(f"User {user_id} is removed from Admins.", quote=False)
+    else:
+        await message.reply_text(f"User {user_id} was not an Admin.", quote=False)
+
+@app.on_message(filters.command(["dash", "dashboard"]))
+@admin_or_owner
 async def cmd_dash(client: Client, message: Message):
     status_msg = await message.reply_text("Generating new dashboard access...", quote=False)
     restart_tunnel()
@@ -893,7 +987,7 @@ async def cmd_cancel(client: Client, message: Message):
 
 
 @app.on_message(filters.command("allow"))
-@owner_only
+@admin_or_owner
 async def cmd_allow(client: Client, message: Message):
     args = message.text.split(" ", 2)
     if len(args) < 3:
@@ -918,7 +1012,7 @@ async def cmd_allow(client: Client, message: Message):
         await message.reply_text(f"User {user_id} is already allowed, name updated.", quote=False)
 
 @app.on_message(filters.command("remove"))
-@owner_only
+@admin_or_owner
 async def cmd_remove(client: Client, message: Message):
     if len(message.command) < 2:
         await message.reply_text("Usage: /remove userid", quote=False)
