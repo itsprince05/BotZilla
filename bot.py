@@ -166,7 +166,7 @@ HTML_TEMPLATE = """
     <div id="user-shows-page" style="display: none; height: 100vh; flex-direction: column;">
         <div class="action-bar" style="justify-content: flex-start; gap: 15px;">
             <div class="navbar-icon" onclick="closeUserShows()" style="cursor: pointer;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-left-icon lucide-arrow-left"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
             </div>
             <div class="navbar-title" id="userShowsTitle">User Name</div>
         </div>
@@ -201,16 +201,12 @@ HTML_TEMPLATE = """
 
     <script>
         let currentUserShowsUid = null;
-        
-        function openUserShows(uid, name) {
-            currentUserShowsUid = uid;
-            document.getElementById('main-page').style.display = 'none';
-            document.getElementById('user-shows-page').style.display = 'flex';
-            document.getElementById('userShowsTitle').innerText = name;
-            
+
+        function loadUserShowsData() {
+            if(!currentUserShowsUid) return;
             Promise.all([fetch('/api/shows').then(r => r.json()), fetch('/api/buyers').then(r => r.json())])
             .then(([shows, buyers]) => {
-                const buyer = buyers[uid] || {};
+                const buyer = buyers[currentUserShowsUid] || {};
                 const allowed = buyer.allowed_shows || [];
                 
                 const allowedList = document.getElementById('allowedShowsList');
@@ -239,6 +235,20 @@ HTML_TEMPLATE = """
             });
         }
         
+        function openUserShows(uid, name) {
+            currentUserShowsUid = uid;
+            document.getElementById('main-page').style.display = 'none';
+            document.getElementById('user-shows-page').style.display = 'flex';
+            document.getElementById('userShowsTitle').innerText = name;
+            
+            document.querySelectorAll('#user-shows-page .user-shows-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('#user-shows-page .user-shows-tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelector('#user-shows-page .user-shows-tab:first-child').classList.add('active');
+            document.getElementById('allowed-shows-tab').classList.add('active');
+            
+            loadUserShowsData();
+        }
+        
         function closeUserShows() {
             document.getElementById('user-shows-page').style.display = 'none';
             document.getElementById('main-page').style.display = 'block';
@@ -251,6 +261,8 @@ HTML_TEMPLATE = """
             document.querySelectorAll('#user-shows-page .user-shows-tab-content').forEach(t => t.classList.remove('active'));
             event.currentTarget.classList.add('active');
             document.getElementById(tabId).classList.add('active');
+            
+            loadUserShowsData();
         }
         
         function updateUserShows() {
@@ -314,8 +326,8 @@ HTML_TEMPLATE = """
                 Object.entries(buyers).forEach(([uid, data]) => {
                     const isPaused = data.status === 'paused';
                     const icon = isPaused ? 
-                        `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>` : 
-                        `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
+                        `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play-icon lucide-play"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg>` : 
+                        `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pause-icon lucide-pause"><rect x="14" y="3" width="5" height="18" rx="1"/><rect x="5" y="3" width="5" height="18" rx="1"/></svg>`;
                     
                     const userData = users[uid] || {};
                     const name = data.name || userData.name || 'Unknown';
@@ -334,7 +346,7 @@ HTML_TEMPLATE = """
                                 <div style="flex: 1; overflow: hidden;">
                                     <div class="list-title">${name}</div>
                                     <div class="list-subtitle">${uid}${username}</div>
-                                    <div class="list-subtitle" style="margin-top:2px;">${allowedCount} allowed show(s)</div>
+                                    <div class="list-subtitle" style="margin-top:2px;">${allowedCount} allowed shows</div>
                                 </div>
                             </div>
                             <div class="btn-group" onclick="event.stopPropagation()">
