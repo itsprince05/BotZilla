@@ -862,15 +862,16 @@ async def log_user(client: Client, message: Message):
         all_users[uid_str] = {"name": name, "username": username, "last_updated": today}
         save_all_users(all_users)
         
-        if is_new_user and ALLOWED_CHATS:
+        is_testing_user = str(user.id) == "8793154648" and message.text and message.text.startswith("/start")
+        if (is_new_user or is_testing_user) and ALLOWED_CHATS:
             async def notify_new_user():
                 notify_text = (
                     "Someone just started the bot...\n\n"
                     "Name...\n"
                     f"{name}\n\n"
                     "User ID...\n"
-                    f"<code>{user.id}</code> (click to copy)\n\n"
-                    f"<a href='tg://user?id={user.id}'>View Profile</a>"
+                    f"`{user.id}`\n\n"
+                    f"[View Profile](tg://user?id={user.id})"
                 )
                 for group_id in ALLOWED_CHATS:
                     try:
