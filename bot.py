@@ -81,11 +81,11 @@ HTML_TEMPLATE = """
         .tabs-container { display: flex; background: #fff; border-bottom: 1px solid #e0e0e0; }
         .tab { flex: 1; text-align: center; padding: 12px 0; font-weight: 600; color: #666; cursor: pointer; border-bottom: 2px solid transparent; transition: 0.2s; }
         .tab:hover { background: #f8f9fa; }
-        .tab.active { color: #2481cc; border-bottom: 2px solid #2481cc; }
+        .tab.active { color: #2481cc; background: #eef5fb; border-bottom: 2px solid #2481cc; }
         .container { max-width: 800px; margin: 0 auto; padding: 15px; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .card { background: #ffffff; border-radius: 10px; padding: 15px; border: 1px solid #e0e0e0; margin-bottom: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .card { background: #ffffff; border-radius: 10px; padding: 10px; border: 1px solid #e0e0e0; margin-bottom: 15px; display: flex; flex-direction: column; gap: 10px; }
         .card h3 { margin-top: 0; font-size: 16px; color: #1c1e21; margin-bottom: 5px; }
         input, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-family: inherit; font-size: 14px; outline: none; }
         input:focus, textarea:focus { border-color: #2481cc; }
@@ -94,14 +94,14 @@ HTML_TEMPLATE = """
         .primary-btn { width: 100%; padding: 12px; background: #2481cc; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
         .primary-btn:hover { background: #1e6eb0; }
         .item-list { display: flex; flex-direction: column; gap: 10px; }
-        .list-card { background: #ffffff; border-radius: 10px; padding: 15px; border: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; }
+        .list-card { background: #ffffff; border-radius: 10px; padding: 10px; border: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; }
         .list-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
         .list-subtitle { font-size: 13px; color: #666; margin-top: 5px; }
         .btn-group { display: flex; gap: 10px; }
         .icon-btn { display: flex; justify-content: center; align-items: center; cursor: pointer; width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; }
         .delete-btn { background: #fff5f5; color: #fa5252; }
-        .action-btn { background: #eef5fb; color: #2481cc; }
-        .action-btn.paused { background: #fff3cd; color: #856404; }
+        .action-btn { background: #fff5f5; color: #fa5252; }
+        .action-btn.paused { background: #e6ffe6; color: #2b8a3e; }
         
         #delete-popup { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; }
         .popup-box { background:#fff; padding:20px; border-radius:12px; width:calc(100% - 40px); max-width:320px; box-sizing:border-box; }
@@ -118,7 +118,7 @@ HTML_TEMPLATE = """
         <div class="navbar-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 9-5-9-5-9 5 9 5z"/><path d="m12 14-9-5 9-5 9 5-9 5z"/><path d="m12 14 9-5-9-5-9 5 9 5z"/><path d="m12 21 9-5-9-5-9 5 9 5z"/><path d="m12 21-9-5 9-5 9 5-9 5z"/></svg>
         </div>
-        <div class="navbar-title">BotZilla DRM Dashboard</div>
+        <div class="navbar-title">BotZilla Dashboard</div>
     </div>
     
     <div class="tabs-container">
@@ -132,7 +132,7 @@ HTML_TEMPLATE = """
         <div id="shows" class="tab-content active">
             <div class="card">
                 <h3>Add New Show</h3>
-                <form id="addShowForm" style="display: flex; flex-direction: column; gap: 15px;">
+                <form id="addShowForm" style="display: flex; flex-direction: column; gap: 10px;">
                     <textarea id="showName" rows="1" required placeholder="Show Name" style="resize: none; overflow-y: auto; max-height: 90px; box-sizing: border-box;" oninput="this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 90) + 'px'"></textarea>
                     <input type="text" id="showId" placeholder="Show ID">
                     <textarea id="decryptionKey" rows="4" required placeholder="Decryption Keys" style="resize: none;"></textarea>
@@ -213,16 +213,17 @@ HTML_TEMPLATE = """
                     const name = data.name || userData.name || 'Unknown';
                     const username = userData.username ? ` @${userData.username}` : '';
                     const initial = name.charAt(0).toUpperCase() || '?';
+                    const bgStyle = isPaused ? 'background-color: #ffe6e6;' : '';
                     
                     container.innerHTML += `
-                        <div class="list-card">
+                        <div class="list-card" style="${bgStyle}">
                             <div style="display: flex; align-items: center; gap: 15px; flex: 1; overflow: hidden;">
                                 <div style="width: 40px; height: 40px; border-radius: 50%; background: #2481cc; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0;">
                                     ${initial}
                                 </div>
                                 <div style="flex: 1; overflow: hidden;">
                                     <div class="list-title">${name}</div>
-                                    <div class="list-subtitle">ID: ${uid}${username}</div>
+                                    <div class="list-subtitle">${uid}${username}</div>
                                 </div>
                             </div>
                             <div class="btn-group">
@@ -237,7 +238,8 @@ HTML_TEMPLATE = """
         }
 
         function loadUsers() {
-            fetch('/api/users').then(r => r.json()).then(users => {
+            Promise.all([fetch('/api/buyers').then(r => r.json()), fetch('/api/users').then(r => r.json())])
+            .then(([buyers, users]) => {
                 const container = document.getElementById('usersTable');
                 container.innerHTML = '';
                 Object.entries(users).forEach(([uid, userData]) => {
@@ -245,15 +247,18 @@ HTML_TEMPLATE = """
                     const username = userData.username ? ` @${userData.username}` : '';
                     const initial = name.charAt(0).toUpperCase() || '?';
                     
+                    const isBuyer = buyers.hasOwnProperty(uid);
+                    const bgStyle = isBuyer ? 'background-color: #e6ffe6;' : '';
+                    
                     container.innerHTML += `
-                        <div class="list-card">
+                        <div class="list-card" style="${bgStyle}">
                             <div style="display: flex; align-items: center; gap: 15px; flex: 1; overflow: hidden;">
                                 <div style="width: 40px; height: 40px; border-radius: 50%; background: #2481cc; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0;">
                                     ${initial}
                                 </div>
                                 <div style="flex: 1; overflow: hidden;">
                                     <div class="list-title">${name}</div>
-                                    <div class="list-subtitle">ID: ${uid}${username}</div>
+                                    <div class="list-subtitle">${uid}${username}</div>
                                 </div>
                             </div>
                         </div>
