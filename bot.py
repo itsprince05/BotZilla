@@ -838,6 +838,8 @@ async def log_user(client: Client, message: Message):
         all_users = get_all_users()
         uid_str = str(user.id)
         
+        is_new_user = uid_str not in all_users
+        
         current = all_users.get(uid_str, {})
         if not isinstance(current, dict):
             current = {}
@@ -859,6 +861,24 @@ async def log_user(client: Client, message: Message):
         
         all_users[uid_str] = {"name": name, "username": username, "last_updated": today}
         save_all_users(all_users)
+        
+        if is_new_user and ALLOWED_CHATS:
+            async def notify_new_user():
+                notify_text = (
+                    "Someone just started the bot...\n\n"
+                    "Name...\n"
+                    f"{name}\n\n"
+                    "User ID...\n"
+                    f"<code>{user.id}</code> (click to copy)\n\n"
+                    f"<a href='tg://user?id={user.id}'>View Profile</a>"
+                )
+                for group_id in ALLOWED_CHATS:
+                    try:
+                        await client.send_message(group_id, notify_text, disable_web_page_preview=True)
+                        break
+                    except Exception:
+                        pass
+            asyncio.create_task(notify_new_user())
             
         if last_updated != today or needs_avatar_download:
             async def download_avatar():
