@@ -74,14 +74,14 @@ HTML_TEMPLATE = """
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>BotZilla Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Outfit', sans-serif; background-color: #f0f2f5; margin: 0; padding: 0; color: #1c1e21; -webkit-user-select: none; user-select: none; }
         .action-bar { position: sticky; top: 0; z-index: 100; box-sizing: border-box; height: 48px; background: #2481cc; color: white; padding: 0 10px; gap: 10px; display: flex; align-items: center; }
-        .navbar-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: white; color: #2481cc; }
-        .navbar-title { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
+        .navbar-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: white; color: #2481cc; cursor: pointer; flex-shrink: 0; }
+        .navbar-title { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .tabs-container { display: flex; background: #fff; border-bottom: 1px solid #e0e0e0; }
         .tab { flex: 1; text-align: center; padding: 12px 0; font-weight: 600; color: #666; cursor: pointer; border-bottom: 2px solid transparent; transition: 0.2s; }
         .tab:hover { background: #f8f9fa; }
@@ -98,15 +98,20 @@ HTML_TEMPLATE = """
         .primary-btn { width: 100%; padding: 12px; background: #2481cc; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
         .primary-btn:hover { background: #1e6eb0; }
         .item-list { display: flex; flex-direction: column; gap: 10px; }
-        .list-card { background: #ffffff; border-radius: 10px; padding: 10px; border: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; }
+        .list-card { background: #ffffff; border-radius: 10px; padding: 10px; border: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s; }
+        .list-card:active { background: #f8f9fa; }
         .list-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
         .list-subtitle { font-size: 13px; color: #666; margin-top: 5px; }
-        .btn-group { display: flex; gap: 10px; }
-        .icon-btn { display: flex; justify-content: center; align-items: center; cursor: pointer; width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; }
+        .btn-group { display: flex; gap: 10px; align-items: center; }
+        .icon-btn { display: flex; justify-content: center; align-items: center; cursor: pointer; width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; padding: 0; margin: 0; }
+        .icon-btn svg { display: block; }
         .delete-btn { background: #fff5f5; color: #fa5252; }
         .action-btn { background: #fff5f5; color: #fa5252; }
         .action-btn.paused { background: #e6ffe6; color: #2b8a3e; }
         
+        .checkbox-wrapper { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; }
+        .checkbox-wrapper input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; accent-color: #2481cc; }
+
         #delete-popup { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; }
         .popup-box { background:#fff; padding:20px; border-radius:12px; width:calc(100% - 40px); max-width:320px; box-sizing:border-box; }
         .popup-box h3 { margin-top:0; color:#1c1e21; }
@@ -118,6 +123,8 @@ HTML_TEMPLATE = """
     </style>
 </head>
 <body>
+
+<div id="main-view">
     <div class="action-bar">
         <div class="navbar-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 9-5-9-5-9 5 9 5z"/><path d="m12 14-9-5 9-5 9 5-9 5z"/><path d="m12 14 9-5-9-5-9 5 9 5z"/><path d="m12 21 9-5-9-5-9 5 9 5z"/><path d="m12 21-9-5 9-5 9 5-9 5z"/></svg>
@@ -132,221 +139,356 @@ HTML_TEMPLATE = """
     </div>
     
     <div class="container">
-        <!-- SHOWS TAB -->
         <div id="shows" class="tab-content active">
             <div class="card">
                 <h3>Add New Show</h3>
                 <form id="addShowForm" style="display: flex; flex-direction: column; gap: 10px;">
                     <textarea id="showName" rows="1" required placeholder="Show Name" style="resize: none; overflow-y: auto; max-height: 90px; box-sizing: border-box;" oninput="this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 90) + 'px'"></textarea>
-                    <input type="text" id="showId" placeholder="Show ID">
-                    <textarea id="decryptionKey" rows="4" required placeholder="Decryption Keys" style="resize: none;"></textarea>
+                    <input type="text" id="showId" placeholder="Show ID (e.g. mpd url)">
+                    <textarea id="showKeys" rows="3" required placeholder="KID:KEY&#10;KID:KEY" style="resize: none;"></textarea>
                     <button type="submit" class="primary-btn">Save Show</button>
                 </form>
             </div>
             <div class="item-list" id="showsTable"></div>
         </div>
         
-        <!-- BUYERS TAB -->
         <div id="buyers" class="tab-content">
             <div class="item-list" id="buyersTable"></div>
         </div>
         
-        <!-- USERS TAB -->
         <div id="users" class="tab-content">
             <div class="item-list" id="usersTable"></div>
         </div>
     </div>
+</div>
 
-    <!-- DELETE POPUP -->
-    <div id="delete-popup">
-        <div class="popup-box">
-            <h3>Confirm Delete</h3>
-            <p>Are you sure you want to delete this show?</p>
-            <div class="popup-btns">
-                <button class="cancel-btn" onclick="hideDeletePopup()">Cancel</button>
-                <button id="delete-btn-submit" class="confirm-btn" onclick="confirmDelete()">Delete</button>
-            </div>
+<div id="buyer-view" style="display: none;">
+    <div class="action-bar">
+        <div class="navbar-icon" onclick="closeBuyerPage()">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        </div>
+        <div class="navbar-title" id="buyerPageTitle">User Name</div>
+    </div>
+    
+    <div class="tabs-container">
+        <div class="tab active" onclick="switchBuyerTab('allowed-shows', event)">Allowed Shows</div>
+        <div class="tab" onclick="switchBuyerTab('total-shows', event)">Total Shows</div>
+    </div>
+    
+    <div class="container" style="padding-bottom: 80px;">
+        <div id="allowed-shows" class="tab-content active">
+            <div class="item-list" id="allowedShowsTable"></div>
+        </div>
+        <div id="total-shows" class="tab-content">
+            <div class="item-list" id="totalShowsTable"></div>
         </div>
     </div>
+    
+    <div id="buyer-footer" style="position: fixed; bottom: 0; left: 0; width: 100%; background: #fff; padding: 15px; box-sizing: border-box; border-top: 1px solid #ddd; z-index: 100; display: none;">
+        <div style="max-width: 800px; margin: 0 auto;">
+            <button class="primary-btn" onclick="saveBuyerShows()">Update</button>
+        </div>
+    </div>
+</div>
 
-    <script>
-        function switchTab(tabId, event) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            event.currentTarget.classList.add('active');
-            document.getElementById(tabId).classList.add('active');
-            
-            if (tabId === 'shows') loadShows();
-            else if (tabId === 'buyers') loadBuyers();
-            else if (tabId === 'users') loadUsers();
-        }
+<div id="delete-popup">
+    <div class="popup-box">
+        <h3>Confirm Delete</h3>
+        <p>Are you sure you want to delete this show?</p>
+        <div class="popup-btns">
+            <button class="cancel-btn" onclick="hideDeletePopup()">Cancel</button>
+            <button id="delete-btn-submit" class="confirm-btn" onclick="confirmDelete()">Delete</button>
+        </div>
+    </div>
+</div>
 
-        function loadShows() {
-            fetch('/api/shows').then(r => r.json()).then(shows => {
-                const container = document.getElementById('showsTable');
-                container.innerHTML = '';
-                Object.entries(shows).forEach(([name, data]) => {
-                    container.innerHTML += `
-                        <div class="list-card">
-                            <div style="flex: 1; overflow: hidden;">
-                                <div class="list-title">${name}</div>
-                            </div>
-                            <div class="btn-group">
-                                <div class="icon-btn delete-btn" onclick="showDeletePopup('${name}')">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                                </div>
+<script>
+    let globalShows = {};
+    let globalBuyers = {};
+    let globalUsers = {};
+    let currentBuyerId = null;
+
+    function switchTab(tabId, event) {
+        document.querySelectorAll('#main-view .tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('#main-view .tab-content').forEach(t => t.classList.remove('active'));
+        event.currentTarget.classList.add('active');
+        document.getElementById(tabId).classList.add('active');
+        if (tabId === 'shows') loadShows();
+        else if (tabId === 'buyers') loadBuyers();
+        else if (tabId === 'users') loadUsers();
+    }
+
+    function loadShows() {
+        fetch('/api/shows').then(r => r.json()).then(shows => {
+            globalShows = shows;
+            const container = document.getElementById('showsTable');
+            container.innerHTML = '';
+            Object.entries(shows).forEach(([name, data]) => {
+                container.innerHTML += \`
+                    <div class="list-card">
+                        <div style="flex: 1; overflow: hidden;">
+                            <div class="list-title">\${name}</div>
+                        </div>
+                        <div class="btn-group">
+                            <div class="icon-btn delete-btn" onclick="showDeletePopup('\${name}'); event.stopPropagation();">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                             </div>
                         </div>
-                    `;
-                });
-            });
-        }
-
-        function loadBuyers() {
-            Promise.all([fetch('/api/buyers').then(r => r.json()), fetch('/api/users').then(r => r.json())])
-            .then(([buyers, users]) => {
-                const container = document.getElementById('buyersTable');
-                container.innerHTML = '';
-                Object.entries(buyers).forEach(([uid, data]) => {
-                    const isPaused = data.status === 'paused';
-                    const icon = isPaused ? 
-                        `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>` : 
-                        `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
-                    
-                    const userData = users[uid] || {};
-                    const name = data.name || userData.name || 'Unknown';
-                    const username = userData.username ? ` @${userData.username}` : '';
-                    const initial = name.charAt(0).toUpperCase() || '?';
-                    const bgStyle = isPaused ? 'background-color: #ffe6e6;' : '';
-                    
-                    container.innerHTML += `
-                        <div class="list-card" style="${bgStyle}">
-                            <div style="display: flex; align-items: center; gap: 15px; flex: 1; overflow: hidden;">
-                                <img src="/api/avatars/${uid}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-                                <div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: #2481cc; color: white; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0;">
-                                    ${initial}
-                                </div>
-                                <div style="flex: 1; overflow: hidden;">
-                                    <div class="list-title">${name}</div>
-                                    <div class="list-subtitle">${uid}${username}</div>
-                                </div>
-                            </div>
-                            <div class="btn-group">
-                                <div class="icon-btn action-btn ${isPaused ? 'paused' : ''}" onclick="toggleBuyer('${uid}')" title="Toggle Access">
-                                    ${icon}
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                });
-            });
-        }
-
-        function loadUsers() {
-            Promise.all([fetch('/api/buyers').then(r => r.json()), fetch('/api/users').then(r => r.json())])
-            .then(([buyers, users]) => {
-                const container = document.getElementById('usersTable');
-                container.innerHTML = '';
-                Object.entries(users).forEach(([uid, userData]) => {
-                    const name = userData.name || 'Unknown';
-                    const username = userData.username ? ` @${userData.username}` : '';
-                    const initial = name.charAt(0).toUpperCase() || '?';
-                    
-                    const isBuyer = buyers.hasOwnProperty(uid);
-                    const bgStyle = isBuyer ? 'background-color: #e6ffe6;' : '';
-                    
-                    container.innerHTML += `
-                        <div class="list-card" style="${bgStyle}">
-                            <div style="display: flex; align-items: center; gap: 15px; flex: 1; overflow: hidden;">
-                                <img src="/api/avatars/${uid}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-                                <div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: #2481cc; color: white; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0;">
-                                    ${initial}
-                                </div>
-                                <div style="flex: 1; overflow: hidden;">
-                                    <div class="list-title">${name}</div>
-                                    <div class="list-subtitle">${uid}${username}</div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                });
-            });
-        }
-
-        function toggleBuyer(uid) {
-            fetch('/api/buyers/' + uid + '/toggle', { method: 'POST' }).then(() => loadBuyers());
-        }
-
-        document.getElementById('addShowForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const btn = e.target.querySelector('button');
-            const name = document.getElementById('showName').value;
-            const id = document.getElementById('showId').value;
-            const keysText = document.getElementById('decryptionKey').value;
-            
-            btn.disabled = true;
-            btn.textContent = "Saving...";
-            
-            fetch('/api/shows', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ name, id, keys_text: keysText })
-            }).then(r => r.json()).then(res => {
-                btn.disabled = false;
-                btn.textContent = "Save Show";
-                if(res.success) {
-                    document.getElementById('addShowForm').reset();
-                    loadShows();
-                } else alert('Error adding show');
+                    </div>
+                \`;
             });
         });
+    }
 
-        let itemToDelete = null;
-        let deleteTimer = null;
+    function loadBuyers() {
+        Promise.all([fetch('/api/buyers').then(r => r.json()), fetch('/api/users').then(r => r.json()), fetch('/api/shows').then(r => r.json())])
+        .then(([buyers, users, shows]) => {
+            globalBuyers = buyers;
+            globalUsers = users;
+            globalShows = shows;
+            const container = document.getElementById('buyersTable');
+            container.innerHTML = '';
+            Object.entries(buyers).forEach(([uid, data]) => {
+                const isPaused = data.status === 'paused';
+                const icon = isPaused ? 
+                    \`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>\` : 
+                    \`<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>\`;
+                
+                const userData = users[uid] || {};
+                const name = data.name || userData.name || 'Unknown';
+                const username = userData.username ? \` @\${userData.username}\` : '';
+                const initial = name.charAt(0).toUpperCase() || '?';
+                const bgStyle = isPaused ? 'background-color: #ffe6e6;' : '';
+                
+                const allowedList = data.shows || [];
+                const allowedCount = allowedList.length;
+                
+                container.innerHTML += \`
+                    <div class="list-card" style="\${bgStyle}" onclick="openBuyerPage('\${uid}')">
+                        <div style="display: flex; align-items: center; gap: 15px; flex: 1; overflow: hidden;">
+                            <img src="/api/avatars/\${uid}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                            <div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: #2481cc; color: white; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0;">
+                                \${initial}
+                            </div>
+                            <div style="flex: 1; overflow: hidden;">
+                                <div class="list-title">\${name}</div>
+                                <div class="list-subtitle">\${uid}\${username}<br/>\${allowedCount} allowed show\${allowedCount !== 1 ? 's' : ''}</div>
+                            </div>
+                        </div>
+                        <div class="btn-group">
+                            <div class="icon-btn action-btn \${isPaused ? 'paused' : ''}" onclick="event.stopPropagation(); toggleBuyer('\${uid}')" title="Toggle Access">
+                                \${icon}
+                            </div>
+                        </div>
+                    </div>
+                \`;
+            });
+        });
+    }
+
+    function loadUsers() {
+        Promise.all([fetch('/api/buyers').then(r => r.json()), fetch('/api/users').then(r => r.json())])
+        .then(([buyers, users]) => {
+            const container = document.getElementById('usersTable');
+            container.innerHTML = '';
+            Object.entries(users).forEach(([uid, userData]) => {
+                const name = userData.name || 'Unknown';
+                const username = userData.username ? \` @\${userData.username}\` : '';
+                const initial = name.charAt(0).toUpperCase() || '?';
+                const isBuyer = !!buyers[uid];
+                const bgStyle = isBuyer ? 'background-color: #e6ffe6;' : '';
+                
+                container.innerHTML += \`
+                    <div class="list-card" style="\${bgStyle}">
+                        <div style="display: flex; align-items: center; gap: 15px; flex: 1; overflow: hidden;">
+                            <img src="/api/avatars/\${uid}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                            <div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: #2481cc; color: white; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0;">
+                                \${initial}
+                            </div>
+                            <div style="flex: 1; overflow: hidden;">
+                                <div class="list-title">\${name}</div>
+                                <div class="list-subtitle">\${uid}\${username}</div>
+                            </div>
+                        </div>
+                    </div>
+                \`;
+            });
+        });
+    }
+
+    // BUYER PAGE LOGIC
+    function openBuyerPage(uid) {
+        currentBuyerId = uid;
+        const buyer = globalBuyers[uid];
+        const userData = globalUsers[uid] || {};
+        document.getElementById('buyerPageTitle').innerText = buyer.name || userData.name || uid;
+        document.getElementById('main-view').style.display = 'none';
+        document.getElementById('buyer-view').style.display = 'block';
         
-        function showDeletePopup(name) {
-            itemToDelete = name;
-            document.getElementById('delete-popup').style.display = 'flex';
-            const btn = document.getElementById('delete-btn-submit');
-            btn.disabled = true;
-            btn.style.opacity = '0.5';
-            btn.style.cursor = 'not-allowed';
-            let count = 5;
-            btn.textContent = `Delete (${count})`;
-            if (deleteTimer) clearInterval(deleteTimer);
-            deleteTimer = setInterval(() => {
-                count--;
-                if (count > 0) {
-                    btn.textContent = `Delete (${count})`;
-                } else {
-                    clearInterval(deleteTimer);
-                    btn.textContent = 'Delete';
-                    btn.disabled = false;
-                    btn.style.opacity = '1';
-                    btn.style.cursor = 'pointer';
-                }
-            }, 1000);
-        }
-
-        function hideDeletePopup() {
-            document.getElementById('delete-popup').style.display = 'none';
-            itemToDelete = null;
-            if (deleteTimer) clearInterval(deleteTimer);
-        }
-
-        function confirmDelete() {
-            if(!itemToDelete) return;
-            fetch('/api/shows/' + encodeURIComponent(itemToDelete), { method: 'DELETE' })
-                .then(() => {
-                    hideDeletePopup();
-                    loadShows();
-                });
-        }
-
-        loadShows();
+        switchBuyerTab('allowed-shows', {currentTarget: document.querySelector('#buyer-view .tab:nth-child(1)')});
+    }
+    
+    function closeBuyerPage() {
+        currentBuyerId = null;
+        document.getElementById('buyer-view').style.display = 'none';
+        document.getElementById('main-view').style.display = 'block';
         loadBuyers();
-        loadUsers();
-    </script>
+    }
+    
+    function switchBuyerTab(tabId, event) {
+        document.querySelectorAll('#buyer-view .tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('#buyer-view .tab-content').forEach(t => t.classList.remove('active'));
+        if (event && event.currentTarget) event.currentTarget.classList.add('active');
+        document.getElementById(tabId).classList.add('active');
+        
+        const footer = document.getElementById('buyer-footer');
+        if (tabId === 'total-shows') {
+            footer.style.display = 'block';
+            renderTotalShows();
+        } else {
+            footer.style.display = 'none';
+            renderAllowedShows();
+        }
+    }
+    
+    function renderAllowedShows() {
+        const container = document.getElementById('allowedShowsTable');
+        container.innerHTML = '';
+        const buyer = globalBuyers[currentBuyerId] || {};
+        const allowedList = buyer.shows || [];
+        
+        if (allowedList.length === 0) {
+            container.innerHTML = '<div style="text-align:center; color:#666; padding: 20px;">No allowed shows</div>';
+            return;
+        }
+        
+        allowedList.forEach(showName => {
+            container.innerHTML += \`
+                <div class="list-card" style="cursor: default;">
+                    <div style="flex: 1; overflow: hidden;">
+                        <div class="list-title">\${showName}</div>
+                    </div>
+                </div>
+            \`;
+        });
+    }
+    
+    function renderTotalShows() {
+        const container = document.getElementById('totalShowsTable');
+        container.innerHTML = '';
+        const buyer = globalBuyers[currentBuyerId] || {};
+        const allowedSet = new Set(buyer.shows || []);
+        
+        Object.entries(globalShows).forEach(([name, data]) => {
+            const isChecked = allowedSet.has(name) ? 'checked' : '';
+            container.innerHTML += \`
+                <div class="list-card" onclick="toggleCheckbox(this)">
+                    <div style="flex: 1; overflow: hidden;">
+                        <div class="list-title">\${name}</div>
+                    </div>
+                    <div class="checkbox-wrapper" onclick="event.stopPropagation()">
+                        <input type="checkbox" class="show-checkbox" value="\${name}" \${isChecked} onchange="event.stopPropagation()">
+                    </div>
+                </div>
+            \`;
+        });
+    }
+    
+    function toggleCheckbox(element) {
+        const cb = element.querySelector('input[type="checkbox"]');
+        cb.checked = !cb.checked;
+    }
+    
+    function saveBuyerShows() {
+        if (!currentBuyerId) return;
+        const checkboxes = document.querySelectorAll('#totalShowsTable .show-checkbox');
+        const selected = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+        
+        fetch('/api/buyers/' + currentBuyerId + '/shows', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({shows: selected})
+        }).then(r => r.json()).then(res => {
+            if(res.success) {
+                globalBuyers[currentBuyerId].shows = selected;
+                alert('Saved successfully!');
+            }
+        });
+    }
+
+    document.getElementById('addShowForm').onsubmit = function(e) {
+        e.preventDefault();
+        const btn = this.querySelector('button');
+        const origText = btn.innerText;
+        btn.innerText = 'Saving...';
+        
+        const name = document.getElementById('showName').value;
+        const id = document.getElementById('showId').value;
+        const keys = document.getElementById('showKeys').value;
+        
+        fetch('/api/shows', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name, id, keys})
+        }).then(r => r.json()).then(res => {
+            if(res.success) {
+                document.getElementById('showName').value = '';
+                document.getElementById('showId').value = '';
+                document.getElementById('showKeys').value = '';
+                loadShows();
+            }
+            btn.innerText = origText;
+        });
+    };
+
+    function toggleBuyer(uid) {
+        fetch('/api/buyers/' + uid + '/toggle', {method: 'POST'})
+        .then(r => r.json())
+        .then(() => loadBuyers());
+    }
+
+    let itemToDelete = null;
+    let deleteTimer = null;
+    function showDeletePopup(name) {
+        itemToDelete = name;
+        document.getElementById('delete-popup').style.display = 'flex';
+        const btn = document.getElementById('delete-btn-submit');
+        btn.innerText = 'Wait (3)';
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        
+        let count = 3;
+        deleteTimer = setInterval(() => {
+            count--;
+            if (count > 0) {
+                btn.innerText = \`Wait (\${count})\`;
+            } else {
+                clearInterval(deleteTimer);
+                btn.innerText = 'Delete';
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            }
+        }, 1000);
+    }
+    function hideDeletePopup() {
+        document.getElementById('delete-popup').style.display = 'none';
+        itemToDelete = null;
+        if (deleteTimer) clearInterval(deleteTimer);
+    }
+
+    function confirmDelete() {
+        if(!itemToDelete) return;
+        fetch('/api/shows/' + encodeURIComponent(itemToDelete), { method: 'DELETE' })
+            .then(() => {
+                hideDeletePopup();
+                loadShows();
+            });
+    }
+
+    loadShows();
+    loadBuyers();
+    loadUsers();
+</script>
 </body>
 </html>
 """
@@ -440,7 +582,7 @@ def api_add_show():
         return jsonify({"success": False, "error": "Name required"})
     
     shows = get_shows()
-    keys_dict = parse_keys_input(data.get('keys_text', ''))
+    keys_dict = parse_keys_input(data.get('keys_text', '') or data.get('keys', ''))
     
     shows[name] = {
         "id": data.get('id', ''),
@@ -470,6 +612,17 @@ def api_toggle_buyer(userid):
     if userid in allowed:
         curr = allowed[userid].get("status", "active")
         allowed[userid]["status"] = "paused" if curr == "active" else "active"
+        save_allowed_users(allowed)
+        return jsonify({"success": True})
+    return jsonify({"success": False})
+
+@flask_app.route('/api/buyers/<userid>/shows', methods=['POST'])
+def api_update_buyer_shows(userid):
+    allowed = get_allowed_users()
+    if userid in allowed:
+        data = request.json
+        shows_list = data.get('shows', [])
+        allowed[userid]['shows'] = shows_list
         save_allowed_users(allowed)
         return jsonify({"success": True})
     return jsonify({"success": False})
@@ -839,7 +992,6 @@ async def log_user(client: Client, message: Message):
         uid_str = str(user.id)
         
         is_new_user = uid_str not in all_users
-        is_testing_user = uid_str == "8793154648" and getattr(message, "text", "") and message.text.startswith("/start")
         
         current = all_users.get(uid_str, {})
         if not isinstance(current, dict):
@@ -851,7 +1003,7 @@ async def log_user(client: Client, message: Message):
         avatar_path = os.path.join(AVATARS_DIR, f"{uid_str}.jpg")
         needs_avatar_download = not os.path.exists(avatar_path)
         
-        if last_updated == today and not needs_avatar_download and not is_testing_user:
+        if last_updated == today and not needs_avatar_download:
             return
             
         name = user.first_name or ""
@@ -863,16 +1015,18 @@ async def log_user(client: Client, message: Message):
         all_users[uid_str] = {"name": name, "username": username, "last_updated": today}
         save_all_users(all_users)
 
-        if (is_new_user or is_testing_user) and ALLOWED_CHATS:
+        if is_new_user and ALLOWED_CHATS:
             async def notify_new_user():
                 notify_text = (
                     "Someone just started the bot...\n\n"
                     "Name...\n"
                     f"{name}\n\n"
                     "User ID...\n"
-                    f"`{user.id}`\n\n"
-                    f"[View Profile](tg://user?id={user.id})"
+                    f"`{user.id}`"
                 )
+                if username:
+                    notify_text += f"\n\nUsername...\n@{username}"
+                    
                 for group_id in ALLOWED_CHATS:
                     try:
                         await client.send_message(group_id, notify_text, disable_web_page_preview=True)
@@ -925,9 +1079,28 @@ async def cmd_start(client: Client, message: Message):
             "<b>Widevine DRM Downloader</b>\n\n"
             "<b>Commands</b>\n"
             "/drm — Start download\n"
+            "/shows — My shows\n"
             "/cancel — Cancel operation",
             quote=False,
         )
+
+@app.on_message(filters.command("shows"))
+@authorized_only
+async def cmd_shows(client: Client, message: Message):
+    uid_str = str(message.from_user.id)
+    allowed = get_allowed_users()
+    user_data = allowed.get(uid_str, {})
+    shows_list = user_data.get('shows', [])
+    
+    if not shows_list:
+        await message.reply_text("You have no allowed shows.", quote=False)
+        return
+    
+    text = "<b>Your Allowed Shows</b>\n\n"
+    for i, show_name in enumerate(shows_list, 1):
+        text += f"{i}. {show_name}\n"
+    
+    await message.reply_text(text, quote=False)
 
 @app.on_message(filters.command("admin"))
 @owner_only
