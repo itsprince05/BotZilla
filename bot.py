@@ -398,7 +398,7 @@ USER_SHOWS_TEMPLATE = """
         .tabs-container { display: flex; background: #fff; border-bottom: 1px solid #e0e0e0; }
         .tab { flex: 1; text-align: center; padding: 12px 0; font-weight: 600; color: #666; cursor: pointer; border-bottom: 2px solid transparent; transition: 0.2s; }
         .tab.active { color: #2481cc; background: #eef5fb; border-bottom: 2px solid #2481cc; }
-        .container { max-width: 800px; margin: 0 auto; padding: 15px; }
+        .container { max-width: 800px; margin: 0 auto; padding: 15px; padding-bottom: 80px; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
         .card { background: #ffffff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
@@ -426,13 +426,6 @@ USER_SHOWS_TEMPLATE = """
     </div>
     
     <div class="container">
-        <div class="card" style="margin-bottom: 20px;">
-            <h3>Update Permissions</h3>
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-                <button id="updateBtn" class="primary-btn" onclick="updateShows()">Save Changes</button>
-            </div>
-        </div>
-
         <div id="allowed-shows-tab" class="tab-content active">
             <div class="item-list">
                 {% if allowed_shows|length == 0 %}
@@ -467,6 +460,12 @@ USER_SHOWS_TEMPLATE = """
         </div>
     </div>
 
+    <div style="position: fixed; bottom: 0; left: 0; width: 100%; background: #ffffff; border-top: 1px solid #e0e0e0; padding: 15px; box-sizing: border-box; display: flex; justify-content: center; z-index: 1000;">
+        <div style="width: 100%; max-width: 800px;">
+            <button id="updateBtn" class="primary-btn" onclick="updateShows()">Update</button>
+        </div>
+    </div>
+
     <script>
         function syncCb(val, checked) {
             document.querySelectorAll('.show-checkbox').forEach(cb => {
@@ -484,7 +483,7 @@ USER_SHOWS_TEMPLATE = """
         function updateShows() {
             const btn = document.getElementById('updateBtn');
             btn.disabled = true;
-            btn.innerHTML = 'Updating...';
+            btn.innerHTML = 'Updating';
             
             const checkboxes = document.querySelectorAll('.show-checkbox');
             let newAllowed = [];
@@ -500,7 +499,7 @@ USER_SHOWS_TEMPLATE = """
             }).then(r => r.json()).then(res => {
                 btn.disabled = false;
                 if(res.success) {
-                    btn.innerHTML = 'Updated!';
+                    btn.innerHTML = 'Updated';
                     btn.style.backgroundColor = '#2b8a3e';
                     setTimeout(() => {
                         window.location.reload();
