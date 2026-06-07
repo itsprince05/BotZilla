@@ -69,7 +69,7 @@ AVATARS_DIR = os.path.join(BOT_DIR, "avatars")
 ADMINS_FILE = os.path.join(BOT_DIR, "admins.json")
 os.makedirs(AVATARS_DIR, exist_ok=True)
 
-HTML_TEMPLATE = """
+HTML_TEMPLATE = ""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -104,7 +104,7 @@ HTML_TEMPLATE = """
         .list-subtitle { font-size: 13px; color: #666; margin-top: 5px; }
         .btn-group { display: flex; gap: 10px; align-items: center; }
         .icon-btn { display: flex; justify-content: center; align-items: center; cursor: pointer; width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; padding: 0; margin: 0; }
-        .icon-btn svg { display: block; }
+        .icon-btn svg { display: block; margin: auto; }
         .delete-btn { background: #fff5f5; color: #fa5252; }
         .action-btn { background: #fff5f5; color: #fa5252; }
         .action-btn.paused { background: #e6ffe6; color: #2b8a3e; }
@@ -612,6 +612,17 @@ def api_toggle_buyer(userid):
     if userid in allowed:
         curr = allowed[userid].get("status", "active")
         allowed[userid]["status"] = "paused" if curr == "active" else "active"
+        save_allowed_users(allowed)
+        return jsonify({"success": True})
+    return jsonify({"success": False})
+
+@flask_app.route('/api/buyers/<userid>/shows', methods=['POST'])
+def api_update_buyer_shows(userid):
+    data = request.json
+    shows_list = data.get('shows', [])
+    allowed = get_allowed_users()
+    if userid in allowed:
+        allowed[userid]["shows"] = shows_list
         save_allowed_users(allowed)
         return jsonify({"success": True})
     return jsonify({"success": False})
@@ -1333,7 +1344,7 @@ async def main():
     await app.stop()
 
 
-@app.on_message(filters.command("drm"))
+@app.on_message(filters.command(["drm", "shows"]))
 @authorized_only
 async def drm_start(client: Client, message: Message):
     if not check_tool(MP4DECRYPT_PATH):
@@ -1353,7 +1364,7 @@ async def drm_start(client: Client, message: Message):
     )
 
 
-@app.on_message(filters.text & ~filters.command(["start", "status", "cancel", "update", "drm", "allow", "remove", "dash", "dashboard"]))
+@app.on_message(filters.text & ~filters.command(["start", "status", "cancel", "update", "drm", "shows", "allow", "remove", "dash", "dashboard"]))
 @authorized_only
 async def handle_text(client: Client, message: Message):
     user_id = message.from_user.id
@@ -1380,6 +1391,19 @@ async def handle_text(client: Client, message: Message):
         state["mpd_content"] = mpd_content
         
         shows = get_shows()
+        uid_str = str(message.from_user.id)
+        is_owner = OWNER_IDS and message.from_user.id in OWNER_IDS
+        is_admin = message.from_user.id in get_admins()
+        
+        if not (is_owner or is_admin):
+            allowed = get_allowed_users()
+            user_shows = allowed.get(uid_str, {}).get("shows", [])
+            shows = {k: v for k, v in shows.items() if k in user_shows}
+            
+        if not shows and not (is_owner or is_admin):
+            await status_msg.edit_text("You don't have access to any shows.")
+            del user_states[message.from_user.id]
+            return
         
         if not shows:
             state["step"] = "ASK_KEYS"
@@ -1395,7 +1419,8 @@ async def handle_text(client: Client, message: Message):
             keyboard = []
             for show_name in shows.keys():
                 keyboard.append([InlineKeyboardButton(show_name, callback_data=f"show_{show_name}")])
-            keyboard.append([InlineKeyboardButton("✍️ Enter Manual Key", callback_data="manual_key")])
+            if is_owner or is_admin:
+                keyboard.append([InlineKeyboardButton("✍️ Enter Manual Key", callback_data="manual_key")])
             
             await status_msg.edit_text(
                 "<b>Step 2/2 — Select Show Key</b>\n\n"
