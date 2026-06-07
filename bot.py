@@ -1289,11 +1289,10 @@ async def cmd_start(client: Client, message: Message):
             quote=False,
         )
     else:
+        name = message.from_user.first_name or "User"
         await message.reply_text(
-            "<b>Widevine DRM Downloader</b>\n\n"
-            "<b>Commands</b>\n"
-            "/drm — Start download\n"
-            "/cancel — Cancel operation",
+            f"Hey {name}\n\n"
+            "Click /show_list to get all your shows list...",
             quote=False,
         )
 
@@ -1558,9 +1557,41 @@ async def main():
     await app.stop()
 
 
-@app.on_message(filters.command("shows"))
+import math
+
+def get_show_list_keyboard(shows_list, page=1):
+    items_per_page = 10
+    total_shows = len(shows_list)
+    total_pages = math.ceil(total_shows / items_per_page)
+    if total_pages == 0:
+        total_pages = 1
+    
+    start_idx = (page - 1) * items_per_page
+    end_idx = start_idx + items_per_page
+    
+    current_shows = shows_list[start_idx:end_idx]
+    
+    keyboard = []
+    for show in current_shows:
+        keyboard.append([InlineKeyboardButton(show, callback_data="ignore")])
+        
+    if total_pages > 1:
+        nav_row = []
+        if page > 1:
+            nav_row.append(InlineKeyboardButton("Prev", callback_data=f"showlist_page_{page-1}"))
+        
+        nav_row.append(InlineKeyboardButton(f"Total {total_shows}", callback_data="ignore"))
+        
+        if page < total_pages:
+            nav_row.append(InlineKeyboardButton("Next", callback_data=f"showlist_page_{page+1}"))
+            
+        keyboard.append(nav_row)
+        
+    return InlineKeyboardMarkup(keyboard)
+
+@app.on_message(filters.command("show_list"))
 @authorized_only
-async def cmd_shows(client: Client, message: Message):
+async def cmd_show_list(client: Client, message: Message):
     user_id = message.from_user.id
     is_owner = OWNER_IDS and user_id in OWNER_IDS
     shows = get_shows()
@@ -1574,11 +1605,40 @@ async def cmd_shows(client: Client, message: Message):
         await message.reply_text("You have no allowed shows.", quote=False)
         return
         
-    text = "<b>Your Allowed Shows:</b>\n\n"
-    for show in shows.keys():
-        text += f"• <code>{show}</code>\n"
-    text += "\nUse /drm to start downloading."
-    await message.reply_text(text, quote=False)
+    shows_list = list(shows.keys())
+    keyboard = get_show_list_keyboard(shows_list, page=1)
+    
+    await message.reply_text(
+        "You can download the episodes of below shows...\n",
+        reply_markup=keyboard,
+        quote=False
+    )
+
+@app.on_callback_query(filters.regex(r"^showlist_page_(\d+)$"))
+@authorized_only
+async def showlist_pagination(client: Client, query):
+    page = int(query.matches[0].group(1))
+    user_id = query.from_user.id
+    is_owner = OWNER_IDS and user_id in OWNER_IDS
+    shows = get_shows()
+    
+    if not is_owner:
+        allowed_users = get_allowed_users()
+        user_allowed = allowed_users.get(str(user_id), {}).get("allowed_shows", [])
+        shows = {k: v for k, v in shows.items() if k in user_allowed}
+        
+    shows_list = list(shows.keys())
+    keyboard = get_show_list_keyboard(shows_list, page=page)
+    
+    await query.message.edit_text(
+        "You can download the episodes of below shows...\n",
+        reply_markup=keyboard
+    )
+    await query.answer()
+
+@app.on_callback_query(filters.regex(r"^ignore$"))
+async def ignore_callback(client: Client, query):
+    await query.answer()
 
 @app.on_message(filters.command("drm"))
 @authorized_only
@@ -1600,7 +1660,7 @@ async def drm_start(client: Client, message: Message):
     )
 
 
-@app.on_message(filters.text & ~filters.command(["start", "status", "cancel", "update", "drm", "shows", "allow", "remove", "dash", "dashboard"]))
+@app.on_message(filters.text & ~filters.command(["start", "status", "cancel", "update", "drm", "show_list", "allow", "remove", "dash", "dashboard"]))
 @authorized_only
 async def handle_text(client: Client, message: Message):
     user_id = message.from_user.id
