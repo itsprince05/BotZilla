@@ -236,6 +236,9 @@ HTML_TEMPLATE = """
                                 <div style="flex: 1; overflow: hidden;">
                                     <div class="list-title">${showName}</div>
                                 </div>
+                                <div class="btn-group">
+                                    <div style="width: 36px; height: 36px;"></div>
+                                </div>
                             </div>`;
                     });
                 }
@@ -245,8 +248,8 @@ HTML_TEMPLATE = """
                 Object.keys(shows).forEach(showName => {
                     const safeId = encodeURIComponent(showName).replace(/%/g, '_');
                     const isChecked = allowed.includes(showName);
-                    const checkedSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2481cc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-square"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg>`;
-                    const uncheckedSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>`;
+                    const checkedSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2481cc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-square"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg>`;
+                    const uncheckedSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>`;
                     
                     totalList.innerHTML += `
                         <div class="list-card" style="cursor: pointer;" onclick="toggleShowSelection('${safeId}')">
@@ -254,7 +257,7 @@ HTML_TEMPLATE = """
                                 <div class="list-title">${showName}</div>
                             </div>
                             <div class="btn-group">
-                                <div class="icon-btn" id="icon_${safeId}" style="background: transparent; padding: 0;">
+                                <div class="icon-btn" id="icon_${safeId}">
                                     ${isChecked ? checkedSvg : uncheckedSvg}
                                 </div>
                             </div>
@@ -271,9 +274,9 @@ HTML_TEMPLATE = """
             cb.checked = !cb.checked;
             const iconDiv = document.getElementById('icon_' + safeId);
             if (cb.checked) {
-                iconDiv.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2481cc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-square"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg>`;
+                iconDiv.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2481cc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-square"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg>`;
             } else {
-                iconDiv.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>`;
+                iconDiv.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>`;
             }
         }
         
@@ -402,7 +405,7 @@ HTML_TEMPLATE = """
                                 </div>
                             </div>
                             <div class="btn-group" onclick="event.stopPropagation()">
-                                <div class="icon-btn action-btn ${isPaused ? 'paused' : ''}" onclick="toggleBuyer('${uid}')" title="Toggle Access">
+                                <div id="toggle-btn-${uid}" class="icon-btn action-btn ${isPaused ? 'paused' : ''}" onclick="toggleBuyer('${uid}')" title="Toggle Access">
                                     ${icon}
                                 </div>
                             </div>
@@ -445,6 +448,10 @@ HTML_TEMPLATE = """
         }
 
         function toggleBuyer(uid) {
+            const btn = document.getElementById('toggle-btn-' + uid);
+            if (btn) {
+                btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-loader-icon lucide-loader"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg>`;
+            }
             fetch('/api/buyers/' + uid + '/toggle', { method: 'POST' }).then(() => loadBuyers());
         }
 
