@@ -115,11 +115,15 @@ HTML_TEMPLATE = """
         .popup-btns button { flex:1; padding:12px 15px; border:none; border-radius:10px; cursor:pointer; font-family:inherit; font-weight:600; font-size:15px; }
         .cancel-btn { background:#f0f2f5; color:#333; }
         .confirm-btn { background:#fa5252; color:#fff; }
+        .checkbox { width: 20px; height: 20px; }
+        .user-shows-tab-content { display: none; }
+        .user-shows-tab-content.active { display: block; }
     </style>
 </head>
 <body>
-    <div class="action-bar">
-        <div class="navbar-icon">
+    <div id="main-page">
+        <div class="action-bar">
+            <div class="navbar-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 9-5-9-5-9 5 9 5z"/><path d="m12 14-9-5 9-5 9 5-9 5z"/><path d="m12 14 9-5-9-5-9 5 9 5z"/><path d="m12 21 9-5-9-5-9 5 9 5z"/><path d="m12 21-9-5 9-5 9 5-9 5z"/></svg>
         </div>
         <div class="navbar-title">BotZilla Dashboard</div>
@@ -156,6 +160,32 @@ HTML_TEMPLATE = """
             <div class="item-list" id="usersTable"></div>
         </div>
     </div>
+    </div>
+
+    <!-- USER SHOWS PAGE -->
+    <div id="user-shows-page" style="display: none; height: 100vh; flex-direction: column;">
+        <div class="action-bar" style="justify-content: flex-start; gap: 15px;">
+            <div class="navbar-icon" onclick="closeUserShows()" style="cursor: pointer;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            </div>
+            <div class="navbar-title" id="userShowsTitle">User Name</div>
+        </div>
+        <div class="tabs-container">
+            <div class="tab user-shows-tab active" onclick="switchUserShowsTab('allowed-shows-tab', event)">Allowed Shows</div>
+            <div class="tab user-shows-tab" onclick="switchUserShowsTab('total-shows-tab', event)">Total Shows</div>
+        </div>
+        <div class="container" style="flex: 1; overflow-y: auto; padding-bottom: 80px;">
+            <div id="allowed-shows-tab" class="user-shows-tab-content active">
+                <div class="item-list" id="allowedShowsList"></div>
+            </div>
+            <div id="total-shows-tab" class="user-shows-tab-content">
+                <div class="item-list" id="totalShowsList"></div>
+            </div>
+        </div>
+        <div style="position: fixed; bottom: 0; left: 0; width: 100%; padding: 15px; background: #f0f2f5; box-sizing: border-box;">
+            <button onclick="updateUserShows()" class="primary-btn">Update</button>
+        </div>
+    </div>
 
     <!-- DELETE POPUP -->
     <div id="delete-popup">
@@ -170,6 +200,80 @@ HTML_TEMPLATE = """
     </div>
 
     <script>
+        let currentUserShowsUid = null;
+        
+        function openUserShows(uid, name) {
+            currentUserShowsUid = uid;
+            document.getElementById('main-page').style.display = 'none';
+            document.getElementById('user-shows-page').style.display = 'flex';
+            document.getElementById('userShowsTitle').innerText = name;
+            
+            Promise.all([fetch('/api/shows').then(r => r.json()), fetch('/api/buyers').then(r => r.json())])
+            .then(([shows, buyers]) => {
+                const buyer = buyers[uid] || {};
+                const allowed = buyer.allowed_shows || [];
+                
+                const allowedList = document.getElementById('allowedShowsList');
+                allowedList.innerHTML = '';
+                if (allowed.length === 0) {
+                    allowedList.innerHTML = '<div style="padding:10px;text-align:center;color:#666;">0 allowed shows</div>';
+                } else {
+                    allowed.forEach(showName => {
+                        allowedList.innerHTML += `
+                            <div class="list-card">
+                                <div class="list-title">${showName}</div>
+                            </div>`;
+                    });
+                }
+                
+                const totalList = document.getElementById('totalShowsList');
+                totalList.innerHTML = '';
+                Object.keys(shows).forEach(showName => {
+                    const isChecked = allowed.includes(showName) ? 'checked' : '';
+                    totalList.innerHTML += `
+                        <div class="list-card" style="cursor: pointer;" onclick="const cb = document.getElementById('cb_${showName}'); cb.checked = !cb.checked;">
+                            <div class="list-title">${showName}</div>
+                            <input type="checkbox" id="cb_${showName}" class="checkbox" value="${showName}" ${isChecked} onclick="event.stopPropagation()">
+                        </div>`;
+                });
+            });
+        }
+        
+        function closeUserShows() {
+            document.getElementById('user-shows-page').style.display = 'none';
+            document.getElementById('main-page').style.display = 'block';
+            currentUserShowsUid = null;
+            loadBuyers();
+        }
+        
+        function switchUserShowsTab(tabId, event) {
+            document.querySelectorAll('#user-shows-page .user-shows-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('#user-shows-page .user-shows-tab-content').forEach(t => t.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+        }
+        
+        function updateUserShows() {
+            if (!currentUserShowsUid) return;
+            const checkboxes = document.querySelectorAll('#totalShowsList .checkbox');
+            const newAllowed = [];
+            checkboxes.forEach(cb => {
+                if (cb.checked) newAllowed.push(cb.value);
+            });
+            
+            fetch(`/api/buyers/${currentUserShowsUid}/shows`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(newAllowed)
+            }).then(r => r.json()).then(res => {
+                if(res.success) {
+                    closeUserShows();
+                } else {
+                    alert('Failed to update allowed shows');
+                }
+            });
+        }
+
         function switchTab(tabId, event) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
@@ -218,9 +322,10 @@ HTML_TEMPLATE = """
                     const username = userData.username ? ` @${userData.username}` : '';
                     const initial = name.charAt(0).toUpperCase() || '?';
                     const bgStyle = isPaused ? 'background-color: #ffe6e6;' : '';
+                    const allowedCount = (data.allowed_shows || []).length;
                     
                     container.innerHTML += `
-                        <div class="list-card" style="${bgStyle}">
+                        <div class="list-card" style="${bgStyle}; cursor: pointer;" onclick="openUserShows('${uid}', '${name}')">
                             <div style="display: flex; align-items: center; gap: 15px; flex: 1; overflow: hidden;">
                                 <img src="/api/avatars/${uid}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
                                 <div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: #2481cc; color: white; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0;">
@@ -229,9 +334,10 @@ HTML_TEMPLATE = """
                                 <div style="flex: 1; overflow: hidden;">
                                     <div class="list-title">${name}</div>
                                     <div class="list-subtitle">${uid}${username}</div>
+                                    <div class="list-subtitle" style="margin-top:2px;">${allowedCount} allowed show(s)</div>
                                 </div>
                             </div>
-                            <div class="btn-group">
+                            <div class="btn-group" onclick="event.stopPropagation()">
                                 <div class="icon-btn action-btn ${isPaused ? 'paused' : ''}" onclick="toggleBuyer('${uid}')" title="Toggle Access">
                                     ${icon}
                                 </div>
@@ -463,6 +569,19 @@ def api_get_buyers():
     owner_str_ids = [str(x) for x in OWNER_IDS]
     filtered_buyers = {k: v for k, v in buyers.items() if k not in owner_str_ids}
     return jsonify(filtered_buyers)
+
+@flask_app.route('/api/buyers/<userid>/shows', methods=['POST'])
+def api_update_buyer_shows(userid):
+    allowed_shows = request.json
+    if not isinstance(allowed_shows, list):
+        return jsonify({"success": False})
+        
+    allowed = get_allowed_users()
+    if userid in allowed:
+        allowed[userid]["allowed_shows"] = allowed_shows
+        save_allowed_users(allowed)
+        return jsonify({"success": True})
+    return jsonify({"success": False})
 
 @flask_app.route('/api/buyers/<userid>/toggle', methods=['POST'])
 def api_toggle_buyer(userid):
@@ -839,7 +958,6 @@ async def log_user(client: Client, message: Message):
         uid_str = str(user.id)
         
         is_new_user = uid_str not in all_users
-        is_testing_user = uid_str == "8793154648" and getattr(message, "text", "") and message.text.startswith("/start")
         
         current = all_users.get(uid_str, {})
         if not isinstance(current, dict):
@@ -851,7 +969,7 @@ async def log_user(client: Client, message: Message):
         avatar_path = os.path.join(AVATARS_DIR, f"{uid_str}.jpg")
         needs_avatar_download = not os.path.exists(avatar_path)
         
-        if last_updated == today and not needs_avatar_download and not is_testing_user:
+        if last_updated == today and not needs_avatar_download:
             return
             
         name = user.first_name or ""
@@ -863,17 +981,26 @@ async def log_user(client: Client, message: Message):
         all_users[uid_str] = {"name": name, "username": username, "last_updated": today}
         save_all_users(all_users)
 
-        if (is_new_user or is_testing_user) and ALLOWED_CHATS:
+        if is_new_user and ALLOWED_CHATS:
             async def notify_new_user():
-                profile_link = f"https://t.me/{username}" if username else f"tg://openmessage?user_id={user.id}"
-                notify_text = (
-                    "Someone just started the bot...\n\n"
-                    "Name...\n"
-                    f"{name}\n\n"
-                    "User ID...\n"
-                    f"`{user.id}`\n\n"
-                    f"[View Profile]({profile_link})"
-                )
+                if username:
+                    notify_text = (
+                        "Someone just started the bot...\n\n"
+                        "Name...\n"
+                        f"{name}\n\n"
+                        "User ID...\n"
+                        f"`{user.id}`\n\n"
+                        "Username...\n"
+                        f"@{username}"
+                    )
+                else:
+                    notify_text = (
+                        "Someone just started the bot...\n\n"
+                        "Name...\n"
+                        f"{name}\n\n"
+                        "User ID...\n"
+                        f"`{user.id}`"
+                    )
                 for group_id in ALLOWED_CHATS:
                     try:
                         await client.send_message(group_id, notify_text, disable_web_page_preview=True)
@@ -1191,6 +1318,28 @@ async def main():
     await app.stop()
 
 
+@app.on_message(filters.command("shows"))
+@authorized_only
+async def cmd_shows(client: Client, message: Message):
+    user_id = message.from_user.id
+    is_owner = OWNER_IDS and user_id in OWNER_IDS
+    shows = get_shows()
+    
+    if not is_owner:
+        allowed_users = get_allowed_users()
+        user_allowed = allowed_users.get(str(user_id), {}).get("allowed_shows", [])
+        shows = {k: v for k, v in shows.items() if k in user_allowed}
+        
+    if not shows:
+        await message.reply_text("You have no allowed shows.", quote=False)
+        return
+        
+    text = "<b>Your Allowed Shows:</b>\n\n"
+    for show in shows.keys():
+        text += f"• <code>{show}</code>\n"
+    text += "\nUse /drm to start downloading."
+    await message.reply_text(text, quote=False)
+
 @app.on_message(filters.command("drm"))
 @authorized_only
 async def drm_start(client: Client, message: Message):
@@ -1211,7 +1360,7 @@ async def drm_start(client: Client, message: Message):
     )
 
 
-@app.on_message(filters.text & ~filters.command(["start", "status", "cancel", "update", "drm", "allow", "remove", "dash", "dashboard"]))
+@app.on_message(filters.text & ~filters.command(["start", "status", "cancel", "update", "drm", "shows", "allow", "remove", "dash", "dashboard"]))
 @authorized_only
 async def handle_text(client: Client, message: Message):
     user_id = message.from_user.id
@@ -1238,26 +1387,37 @@ async def handle_text(client: Client, message: Message):
         state["mpd_content"] = mpd_content
         
         shows = get_shows()
+        is_owner = OWNER_IDS and user_id in OWNER_IDS
+        
+        if not is_owner:
+            allowed_users = get_allowed_users()
+            user_allowed = allowed_users.get(str(user_id), {}).get("allowed_shows", [])
+            shows = {k: v for k, v in shows.items() if k in user_allowed}
         
         if not shows:
-            state["step"] = "ASK_KEYS"
-            await status_msg.edit_text(
-                "<b>Step 2/2 — Decryption Keys</b>\n\n"
-                "Send KID:KEY pairs, one per line.\n\n"
-                "Format:\n"
-                "<code>kid1:key1\n"
-                "kid2:key2</code>",
-            )
+            if is_owner:
+                state["step"] = "ASK_KEYS"
+                await status_msg.edit_text(
+                    "<b>Step 2/2 — Decryption Keys</b>\n\n"
+                    "Send KID:KEY pairs, one per line.\n\n"
+                    "Format:\n"
+                    "<code>kid1:key1\n"
+                    "kid2:key2</code>",
+                )
+            else:
+                await status_msg.edit_text("You have no allowed shows for decryption. Access denied.")
+                del user_states[user_id]
         else:
             state["step"] = "SELECT_SHOW"
             keyboard = []
             for show_name in shows.keys():
                 keyboard.append([InlineKeyboardButton(show_name, callback_data=f"show_{show_name}")])
-            keyboard.append([InlineKeyboardButton("✍️ Enter Manual Key", callback_data="manual_key")])
+            if is_owner:
+                keyboard.append([InlineKeyboardButton("✍️ Enter Manual Key", callback_data="manual_key")])
             
             await status_msg.edit_text(
                 "<b>Step 2/2 — Select Show Key</b>\n\n"
-                "Select a saved show from the dashboard or enter keys manually.",
+                "Select a saved show to use its keys.",
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
         
