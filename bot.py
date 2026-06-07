@@ -209,7 +209,7 @@ HTML_TEMPLATE = """
             fetch('/api/shows').then(r => r.json()).then(shows => {
                 const container = document.getElementById('showsTable');
                 container.innerHTML = '';
-                Object.entries(shows).forEach(([name, data]) => {
+                Object.entries(shows).sort((a, b) => a[0].toLowerCase().localeCompare(b[0].toLowerCase())).forEach(([name, data]) => {
                     const count = data.allowed_count || 0;
                     container.innerHTML += `
                         <div class="list-card" style="cursor: pointer;" onclick="window.location.href='/show/${encodeURIComponent(name)}'">
@@ -233,7 +233,11 @@ HTML_TEMPLATE = """
             .then(([buyers, users]) => {
                 const container = document.getElementById('buyersTable');
                 container.innerHTML = '';
-                Object.entries(buyers).forEach(([uid, data]) => {
+                Object.entries(buyers).sort((a, b) => {
+                    const aName = (a[1].name || (users[a[0]] || {}).name || 'Unknown').toLowerCase();
+                    const bName = (b[1].name || (users[b[0]] || {}).name || 'Unknown').toLowerCase();
+                    return aName.localeCompare(bName);
+                }).forEach(([uid, data]) => {
                     const isPaused = data.status === 'paused';
                     const icon = isPaused ? 
                         `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play-icon lucide-play"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg>` : 
@@ -276,7 +280,7 @@ HTML_TEMPLATE = """
             .then(([buyers, users]) => {
                 const container = document.getElementById('usersTable');
                 container.innerHTML = '';
-                Object.entries(users).forEach(([uid, userData]) => {
+                Object.entries(users).reverse().forEach(([uid, userData]) => {
                     const name = userData.name || 'Unknown';
                     const username = userData.username ? ` @${userData.username}` : '';
                     const initial = name.charAt(0).toUpperCase() || '?';
@@ -727,7 +731,7 @@ def user_page(userid):
     name = buyer.get("name") or user.get("name") or "Unknown"
     allowed_shows = buyer.get("allowed_shows", [])
     
-    return render_template_string(USER_SHOWS_TEMPLATE, userid=userid, name=name, allowed_shows=allowed_shows, all_shows=list(shows.keys()))
+    return render_template_string(USER_SHOWS_TEMPLATE, userid=userid, name=name, allowed_shows=sorted(allowed_shows, key=lambda x: x.lower()), all_shows=sorted(list(shows.keys()), key=lambda x: x.lower()))
 
 @flask_app.route('/show/<name>')
 def show_page(name):
@@ -744,6 +748,7 @@ def show_page(name):
             merged["username"] = user_data.get("username") or ""
             filtered_buyers[k] = merged
             
+    filtered_buyers = dict(sorted(filtered_buyers.items(), key=lambda item: item[1].get("name", "").lower()))
     return render_template_string(SHOW_USERS_TEMPLATE, show_name=name, buyers=filtered_buyers)
 
 @flask_app.route('/api/shows', methods=['GET'])
@@ -1292,7 +1297,7 @@ async def cmd_start(client: Client, message: Message):
         name = message.from_user.first_name or "User"
         await message.reply_text(
             f"Hey {name}\n\n"
-            "Click /show_list to get all your shows list...",
+            "Click /shows_list to get all your shows list...",
             quote=False,
         )
 
@@ -1444,7 +1449,7 @@ async def cmd_update(client: Client, message: Message):
             await status_msg.edit_text("Already up to date...")
             return
 
-        await status_msg.edit_text("Update Complete...")
+        await status_msg.edit_text("Update complete...")
         
         # Install requirements
         pip_proc = await asyncio.create_subprocess_exec(
@@ -1589,9 +1594,9 @@ def get_show_list_keyboard(shows_list, page=1):
         
     return InlineKeyboardMarkup(keyboard)
 
-@app.on_message(filters.command("show_list"))
+@app.on_message(filters.command("shows_list"))
 @authorized_only
-async def cmd_show_list(client: Client, message: Message):
+async def cmd_shows_list(client: Client, message: Message):
     user_id = message.from_user.id
     is_owner = OWNER_IDS and user_id in OWNER_IDS
     shows = get_shows()
@@ -1605,7 +1610,7 @@ async def cmd_show_list(client: Client, message: Message):
         await message.reply_text("You have no allowed shows.", quote=False)
         return
         
-    shows_list = list(shows.keys())
+    shows_list = sorted(list(shows.keys()), key=lambda x: x.lower())
     keyboard = get_show_list_keyboard(shows_list, page=1)
     
     await message.reply_text(
@@ -1627,7 +1632,7 @@ async def showlist_pagination(client: Client, query):
         user_allowed = allowed_users.get(str(user_id), {}).get("allowed_shows", [])
         shows = {k: v for k, v in shows.items() if k in user_allowed}
         
-    shows_list = list(shows.keys())
+    shows_list = sorted(list(shows.keys()), key=lambda x: x.lower())
     keyboard = get_show_list_keyboard(shows_list, page=page)
     
     await query.message.edit_text(
@@ -1660,7 +1665,7 @@ async def drm_start(client: Client, message: Message):
     )
 
 
-@app.on_message(filters.text & ~filters.command(["start", "status", "cancel", "update", "drm", "show_list", "allow", "remove", "dash", "dashboard"]))
+@app.on_message(filters.text & ~filters.command(["start", "status", "cancel", "update", "drm", "shows_list", "allow", "remove", "dash", "dashboard"]))
 @authorized_only
 async def handle_text(client: Client, message: Message):
     user_id = message.from_user.id
