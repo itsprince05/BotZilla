@@ -62,6 +62,8 @@ log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
 SHOWS_FILE = os.path.join(BOT_DIR, "shows.json")
+ALLOWED_USERS_FILE = os.path.join(BOT_DIR, "allowed_users.json")
+ALL_USERS_FILE = os.path.join(BOT_DIR, "all_users.json")
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -72,47 +74,35 @@ HTML_TEMPLATE = """
     <title>BotZilla Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { 
-            font-family: 'Outfit', sans-serif; 
-            background-color: #f0f2f5; 
-            margin: 0; padding: 0; 
-            color: #1c1e21; 
-            -webkit-user-select: none; user-select: none;
-        }
-        .action-bar { 
-            position: sticky; top: 0; z-index: 100; box-sizing: border-box; height: 48px;
-            background: #2481cc; color: white; padding: 0 10px; gap: 10px;
-            display: flex; align-items: center;
-        }
-        .navbar-icon { width: 32px; height: 32px; border-radius: 50%; margin-right: 0; display: flex; align-items: center; justify-content: center; background: white; color: #2481cc; }
+        body { font-family: 'Outfit', sans-serif; background-color: #f0f2f5; margin: 0; padding: 0; color: #1c1e21; -webkit-user-select: none; user-select: none; }
+        .action-bar { position: sticky; top: 0; z-index: 100; box-sizing: border-box; height: 48px; background: #2481cc; color: white; padding: 0 10px; gap: 10px; display: flex; align-items: center; }
+        .navbar-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: white; color: #2481cc; }
         .navbar-title { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
-        
+        .tabs-container { display: flex; background: #fff; border-bottom: 1px solid #e0e0e0; }
+        .tab { flex: 1; text-align: center; padding: 12px 0; font-weight: 600; color: #666; cursor: pointer; border-bottom: 2px solid transparent; transition: 0.2s; }
+        .tab:hover { background: #f8f9fa; }
+        .tab.active { color: #2481cc; border-bottom: 2px solid #2481cc; }
         .container { max-width: 800px; margin: 0 auto; padding: 15px; }
-        
-        .card { 
-            background: #ffffff; border-radius: 10px; padding: 15px; border: 1px solid #e0e0e0; 
-            margin-bottom: 15px; display: flex; flex-direction: column; gap: 10px;
-        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .card { background: #ffffff; border-radius: 10px; padding: 15px; border: 1px solid #e0e0e0; margin-bottom: 15px; display: flex; flex-direction: column; gap: 10px; }
         .card h3 { margin-top: 0; font-size: 16px; color: #1c1e21; margin-bottom: 5px; }
-        
         input, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-family: inherit; font-size: 14px; outline: none; }
         input:focus, textarea:focus { border-color: #2481cc; }
-        
         textarea::-webkit-scrollbar { display: none; }
         textarea { -ms-overflow-style: none; scrollbar-width: none; }
-        
         .primary-btn { width: 100%; padding: 12px; background: #2481cc; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
         .primary-btn:hover { background: #1e6eb0; }
-        
         .item-list { display: flex; flex-direction: column; gap: 10px; }
-        .show-card { background: #ffffff; border-radius: 10px; padding: 15px; border: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; }
-        .show-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
-        .show-id { font-size: 13px; color: #666; margin-top: 5px; }
-        .show-keys { font-size: 12px; color: #2481cc; font-family: monospace; background: #eef5fb; padding: 8px; border-radius: 6px; margin-top: 8px; word-break: break-all; }
+        .list-card { background: #ffffff; border-radius: 10px; padding: 15px; border: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; }
+        .list-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
+        .list-subtitle { font-size: 13px; color: #666; margin-top: 5px; }
+        .btn-group { display: flex; gap: 10px; }
+        .icon-btn { display: flex; justify-content: center; align-items: center; cursor: pointer; width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; }
+        .delete-btn { background: #fff5f5; color: #fa5252; }
+        .action-btn { background: #eef5fb; color: #2481cc; }
+        .action-btn.paused { background: #fff3cd; color: #856404; }
         
-        .delete-btn { display: flex; justify-content: center; align-items: center; cursor: pointer; width: 36px; height: 36px; border-radius: 50%; background: #fff5f5; color: #fa5252; flex-shrink: 0; margin-left: 10px; }
-        
-        /* DELETE POPUP */
         #delete-popup { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; }
         .popup-box { background:#fff; padding:20px; border-radius:12px; width:calc(100% - 40px); max-width:320px; box-sizing:border-box; }
         .popup-box h3 { margin-top:0; color:#1c1e21; }
@@ -131,21 +121,35 @@ HTML_TEMPLATE = """
         <div class="navbar-title">BotZilla DRM Dashboard</div>
     </div>
     
+    <div class="tabs-container">
+        <div class="tab active" onclick="switchTab('shows', event)">Shows</div>
+        <div class="tab" onclick="switchTab('buyers', event)">Buyers</div>
+        <div class="tab" onclick="switchTab('users', event)">Users</div>
+    </div>
+    
     <div class="container">
-        <!-- ADD SHOW FORM -->
-        <div class="card">
-            <h3>Add New Show</h3>
-            <form id="addShowForm" style="display: flex; flex-direction: column; gap: 15px;">
-                <textarea id="showName" rows="1" required placeholder="Show Name" style="resize: none; overflow-y: auto; max-height: 90px; box-sizing: border-box;" oninput="this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 90) + 'px'"></textarea>
-                <input type="text" id="showId" placeholder="Show ID">
-                <textarea id="decryptionKey" rows="4" required placeholder="Decryption Keys" style="resize: none;"></textarea>
-                <button type="submit" class="primary-btn">Save Show</button>
-            </form>
+        <!-- SHOWS TAB -->
+        <div id="shows" class="tab-content active">
+            <div class="card">
+                <h3>Add New Show</h3>
+                <form id="addShowForm" style="display: flex; flex-direction: column; gap: 15px;">
+                    <textarea id="showName" rows="1" required placeholder="Show Name" style="resize: none; overflow-y: auto; max-height: 90px; box-sizing: border-box;" oninput="this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 90) + 'px'"></textarea>
+                    <input type="text" id="showId" placeholder="Show ID">
+                    <textarea id="decryptionKey" rows="4" required placeholder="Decryption Keys" style="resize: none;"></textarea>
+                    <button type="submit" class="primary-btn">Save Show</button>
+                </form>
+            </div>
+            <div class="item-list" id="showsTable"></div>
         </div>
-
-        <!-- SAVED SHOWS -->
-        <div class="item-list" id="showsTable">
-            <!-- Shows will be populated here -->
+        
+        <!-- BUYERS TAB -->
+        <div id="buyers" class="tab-content">
+            <div class="item-list" id="buyersTable"></div>
+        </div>
+        
+        <!-- USERS TAB -->
+        <div id="users" class="tab-content">
+            <div class="item-list" id="usersTable"></div>
         </div>
     </div>
 
@@ -162,25 +166,84 @@ HTML_TEMPLATE = """
     </div>
 
     <script>
+        function switchTab(tabId, event) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+            
+            if (tabId === 'shows') loadShows();
+            else if (tabId === 'buyers') loadBuyers();
+            else if (tabId === 'users') loadUsers();
+        }
+
         function loadShows() {
-            fetch('/api/shows')
-                .then(r => r.json())
-                .then(shows => {
-                    const container = document.getElementById('showsTable');
-                    container.innerHTML = '';
-                    Object.entries(shows).forEach(([name, data]) => {
-                        container.innerHTML += `
-                            <div class="show-card">
-                                <div style="flex: 1; overflow: hidden;">
-                                    <div class="show-title">${name}</div>
-                                </div>
-                                <div class="delete-btn" onclick="showDeletePopup('${name}')">
+            fetch('/api/shows').then(r => r.json()).then(shows => {
+                const container = document.getElementById('showsTable');
+                container.innerHTML = '';
+                Object.entries(shows).forEach(([name, data]) => {
+                    container.innerHTML += `
+                        <div class="list-card">
+                            <div style="flex: 1; overflow: hidden;">
+                                <div class="list-title">${name}</div>
+                            </div>
+                            <div class="btn-group">
+                                <div class="icon-btn delete-btn" onclick="showDeletePopup('${name}')">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                                 </div>
                             </div>
-                        `;
-                    });
+                        </div>
+                    `;
                 });
+            });
+        }
+
+        function loadBuyers() {
+            fetch('/api/buyers').then(r => r.json()).then(buyers => {
+                const container = document.getElementById('buyersTable');
+                container.innerHTML = '';
+                Object.entries(buyers).forEach(([uid, data]) => {
+                    const isPaused = data.status === 'paused';
+                    const icon = isPaused ? 
+                        `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>` : 
+                        `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
+                    
+                    container.innerHTML += `
+                        <div class="list-card">
+                            <div style="flex: 1; overflow: hidden;">
+                                <div class="list-title">${data.name || 'Unknown'}</div>
+                                <div class="list-subtitle">ID: ${uid}</div>
+                            </div>
+                            <div class="btn-group">
+                                <div class="icon-btn action-btn ${isPaused ? 'paused' : ''}" onclick="toggleBuyer('${uid}')" title="Toggle Access">
+                                    ${icon}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            });
+        }
+
+        function loadUsers() {
+            fetch('/api/users').then(r => r.json()).then(users => {
+                const container = document.getElementById('usersTable');
+                container.innerHTML = '';
+                Object.entries(users).forEach(([uid, name]) => {
+                    container.innerHTML += `
+                        <div class="list-card">
+                            <div style="flex: 1; overflow: hidden;">
+                                <div class="list-title">${name}</div>
+                                <div class="list-subtitle">ID: ${uid}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+            });
+        }
+
+        function toggleBuyer(uid) {
+            fetch('/api/buyers/' + uid + '/toggle', { method: 'POST' }).then(() => loadBuyers());
         }
 
         document.getElementById('addShowForm').addEventListener('submit', (e) => {
@@ -203,9 +266,7 @@ HTML_TEMPLATE = """
                 if(res.success) {
                     document.getElementById('addShowForm').reset();
                     loadShows();
-                } else {
-                    alert('Error adding show');
-                }
+                } else alert('Error adding show');
             });
         });
 
@@ -215,15 +276,12 @@ HTML_TEMPLATE = """
         function showDeletePopup(name) {
             itemToDelete = name;
             document.getElementById('delete-popup').style.display = 'flex';
-            
             const btn = document.getElementById('delete-btn-submit');
             btn.disabled = true;
             btn.style.opacity = '0.5';
             btn.style.cursor = 'not-allowed';
-            
             let count = 5;
             btn.textContent = `Delete (${count})`;
-            
             if (deleteTimer) clearInterval(deleteTimer);
             deleteTimer = setInterval(() => {
                 count--;
@@ -273,6 +331,35 @@ def save_shows(shows):
     with open(SHOWS_FILE, 'w') as f:
         json.dump(shows, f, indent=4)
 
+def get_allowed_users():
+    if not os.path.exists(ALLOWED_USERS_FILE):
+        return {}
+    with open(ALLOWED_USERS_FILE, 'r') as f:
+        try:
+            data = json.load(f)
+            if isinstance(data, list):
+                return {str(uid): {"name": "Unknown", "status": "active"} for uid in data}
+            return data
+        except:
+            return {}
+
+def save_allowed_users(users):
+    with open(ALLOWED_USERS_FILE, 'w') as f:
+        json.dump(users, f, indent=4)
+
+def get_all_users():
+    if not os.path.exists(ALL_USERS_FILE):
+        return {}
+    with open(ALL_USERS_FILE, 'r') as f:
+        try:
+            return json.load(f)
+        except:
+            return {}
+
+def save_all_users(users):
+    with open(ALL_USERS_FILE, 'w') as f:
+        json.dump(users, f, indent=4)
+
 def parse_keys_input(text: str) -> dict:
     import re
     keys = {}
@@ -320,20 +407,59 @@ def api_delete_show(name):
         save_shows(shows)
     return jsonify({"success": True})
 
+@flask_app.route('/api/buyers', methods=['GET'])
+def api_get_buyers():
+    return jsonify(get_allowed_users())
+
+@flask_app.route('/api/buyers/<userid>/toggle', methods=['POST'])
+def api_toggle_buyer(userid):
+    allowed = get_allowed_users()
+    if userid in allowed:
+        curr = allowed[userid].get("status", "active")
+        allowed[userid]["status"] = "paused" if curr == "active" else "active"
+        save_allowed_users(allowed)
+        return jsonify({"success": True})
+    return jsonify({"success": False})
+
+@flask_app.route('/api/users', methods=['GET'])
+def api_get_users():
+    return jsonify(get_all_users())
+
 def start_flask(port):
     flask_app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 
 
 def owner_only(func):
-    async def wrapper(client: Client, message: Message):
-        chat_id = message.chat.id
-        if ALLOWED_CHATS and chat_id not in ALLOWED_CHATS:
-            return
-        user_id = message.from_user.id
-        if OWNER_IDS and user_id not in OWNER_IDS:
-            return
-        return await func(client, message)
+    async def wrapper(client: Client, update):
+        user = getattr(update, "from_user", None)
+        if not user: return
+        user_id = user.id
+        if OWNER_IDS and user_id not in OWNER_IDS: return
+        return await func(client, update)
+    return wrapper
+
+def authorized_only(func):
+    async def wrapper(client: Client, update):
+        user = getattr(update, "from_user", None)
+        if not user: return
+        user_id = user.id
+        
+        chat = getattr(update, "chat", None)
+        if not chat and hasattr(update, "message") and update.message:
+            chat = update.message.chat
+        if not chat: return
+        chat_id = chat.id
+        
+        is_owner = OWNER_IDS and user_id in OWNER_IDS
+        allowed = get_allowed_users()
+        is_allowed = str(user_id) in allowed and allowed[str(user_id)].get("status") == "active"
+        if not (is_owner or is_allowed): return
+        
+        if chat_id != user_id:
+            if ALLOWED_CHATS and chat_id not in ALLOWED_CHATS: return
+            
+        return await func(client, update)
     return wrapper
 
 
@@ -608,9 +734,24 @@ def start_cloudflare_tunnel():
 
 app = Client("drm_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
+@app.on_message(group=-1)
+async def log_user(client: Client, message: Message):
+    user = getattr(message, "from_user", None)
+    if user and user.id:
+        all_users = get_all_users()
+        uid_str = str(user.id)
+        name = user.first_name or ""
+        if getattr(user, "last_name", None):
+            name += f" {user.last_name}"
+        name = name.strip() or "Unknown"
+        
+        if uid_str not in all_users or all_users[uid_str] != name:
+            all_users[uid_str] = name
+            save_all_users(all_users)
+
 
 @app.on_message(filters.command("start"))
-@owner_only
+@authorized_only
 async def cmd_start(client: Client, message: Message):
     has_mp4decrypt = check_tool(MP4DECRYPT_PATH)
 
@@ -658,12 +799,58 @@ async def cmd_status(client: Client, message: Message):
 
 
 @app.on_message(filters.command("cancel"))
-@owner_only
+@authorized_only
 async def cmd_cancel(client: Client, message: Message):
     if message.from_user.id in user_states:
         del user_states[message.from_user.id]
     await message.reply_text("Cancelled.", quote=False)
 
+
+@app.on_message(filters.command("allow"))
+@owner_only
+async def cmd_allow(client: Client, message: Message):
+    args = message.text.split(" ", 2)
+    if len(args) < 3:
+        await message.reply_text("Usage: /allow userid name", quote=False)
+        return
+    try:
+        user_id = int(args[1])
+    except ValueError:
+        await message.reply_text("Invalid userid.", quote=False)
+        return
+        
+    name = args[2].strip()
+    uid_str = str(user_id)
+    allowed = get_allowed_users()
+    if uid_str not in allowed:
+        allowed[uid_str] = {"name": name, "status": "active"}
+        save_allowed_users(allowed)
+        await message.reply_text(f"User {name} ({user_id}) is now allowed.", quote=False)
+    else:
+        allowed[uid_str]["name"] = name
+        save_allowed_users(allowed)
+        await message.reply_text(f"User {user_id} is already allowed, name updated.", quote=False)
+
+@app.on_message(filters.command("remove"))
+@owner_only
+async def cmd_remove(client: Client, message: Message):
+    if len(message.command) < 2:
+        await message.reply_text("Usage: /remove userid", quote=False)
+        return
+    try:
+        user_id = int(message.command[1])
+    except ValueError:
+        await message.reply_text("Invalid userid.", quote=False)
+        return
+        
+    uid_str = str(user_id)
+    allowed = get_allowed_users()
+    if uid_str in allowed:
+        del allowed[uid_str]
+        save_allowed_users(allowed)
+        await message.reply_text(f"User {user_id} access removed.", quote=False)
+    else:
+        await message.reply_text(f"User {user_id} was not in the allowed list.", quote=False)
 
 @app.on_message(filters.command("update"))
 @owner_only
@@ -803,7 +990,7 @@ async def main():
 
 
 @app.on_message(filters.command("drm"))
-@owner_only
+@authorized_only
 async def drm_start(client: Client, message: Message):
     if not check_tool(MP4DECRYPT_PATH):
         await message.reply_text(
@@ -822,8 +1009,8 @@ async def drm_start(client: Client, message: Message):
     )
 
 
-@app.on_message(filters.text & ~filters.command(["start", "status", "cancel", "update", "drm"]))
-@owner_only
+@app.on_message(filters.text & ~filters.command(["start", "status", "cancel", "update", "drm", "allow", "remove", "dash", "dashboard"]))
+@authorized_only
 async def handle_text(client: Client, message: Message):
     user_id = message.from_user.id
     if user_id not in user_states:
@@ -996,7 +1183,7 @@ async def process_drm(client: Client, message: Message, state: dict):
 
 
 @app.on_callback_query()
-@owner_only
+@authorized_only
 async def handle_callback(client: Client, query):
     user_id = query.from_user.id
     if user_id not in user_states:
