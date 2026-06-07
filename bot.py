@@ -53,7 +53,7 @@ dashboard_port = 5000
 # {user_id: {"mpd_url": str, "mpd_content": str}}
 user_states = {}
 
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, send_file
 import threading
 
 flask_app = Flask(__name__)
@@ -64,6 +64,8 @@ log.setLevel(logging.ERROR)
 SHOWS_FILE = os.path.join(BOT_DIR, "shows.json")
 ALLOWED_USERS_FILE = os.path.join(BOT_DIR, "allowed_users.json")
 ALL_USERS_FILE = os.path.join(BOT_DIR, "all_users.json")
+AVATARS_DIR = os.path.join(BOT_DIR, "avatars")
+os.makedirs(AVATARS_DIR, exist_ok=True)
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -218,7 +220,8 @@ HTML_TEMPLATE = """
                     container.innerHTML += `
                         <div class="list-card" style="${bgStyle}">
                             <div style="display: flex; align-items: center; gap: 15px; flex: 1; overflow: hidden;">
-                                <div style="width: 40px; height: 40px; border-radius: 50%; background: #2481cc; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0;">
+                                <img src="/api/avatars/${uid}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                                <div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: #2481cc; color: white; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0;">
                                     ${initial}
                                 </div>
                                 <div style="flex: 1; overflow: hidden;">
@@ -253,7 +256,8 @@ HTML_TEMPLATE = """
                     container.innerHTML += `
                         <div class="list-card" style="${bgStyle}">
                             <div style="display: flex; align-items: center; gap: 15px; flex: 1; overflow: hidden;">
-                                <div style="width: 40px; height: 40px; border-radius: 50%; background: #2481cc; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0;">
+                                <img src="/api/avatars/${uid}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                                <div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: #2481cc; color: white; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0;">
                                     ${initial}
                                 </div>
                                 <div style="flex: 1; overflow: hidden;">
@@ -455,6 +459,13 @@ def api_toggle_buyer(userid):
 @flask_app.route('/api/users', methods=['GET'])
 def api_get_users():
     return jsonify(get_all_users())
+
+@flask_app.route('/api/avatars/<uid>')
+def api_get_avatar(uid):
+    avatar_path = os.path.join(AVATARS_DIR, f"{uid}.jpg")
+    if os.path.exists(avatar_path):
+        return send_file(avatar_path, mimetype='image/jpeg')
+    return "", 404
 
 def start_flask(port):
     flask_app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
@@ -771,19 +782,41 @@ async def log_user(client: Client, message: Message):
     if user and user.id:
         all_users = get_all_users()
         uid_str = str(user.id)
+        
+        current = all_users.get(uid_str, {})
+        if not isinstance(current, dict):
+            current = {}
+            
+        today = time.strftime('%Y-%m-%d')
+        last_updated = current.get("last_updated")
+        
+        avatar_path = os.path.join(AVATARS_DIR, f"{uid_str}.jpg")
+        needs_avatar_download = not os.path.exists(avatar_path)
+        
+        if last_updated == today and not needs_avatar_download:
+            return
+            
         name = user.first_name or ""
         if getattr(user, "last_name", None):
             name += f" {user.last_name}"
         name = name.strip() or "Unknown"
         username = getattr(user, "username", None)
         
-        current = all_users.get(uid_str, {})
-        if not isinstance(current, dict):
-            current = {}
+        all_users[uid_str] = {"name": name, "username": username, "last_updated": today}
+        save_all_users(all_users)
             
-        if current.get("name") != name or current.get("username") != username:
-            all_users[uid_str] = {"name": name, "username": username}
-            save_all_users(all_users)
+        if last_updated != today or needs_avatar_download:
+            async def download_avatar():
+                try:
+                    photos = []
+                    async for photo in client.get_chat_photos(user.id, limit=1):
+                        photos.append(photo)
+                    if photos:
+                        await client.download_media(photos[0].file_id, file_name=avatar_path)
+                except Exception:
+                    pass
+            asyncio.create_task(download_avatar())
+
 
 
 @app.on_message(filters.command("start"))
