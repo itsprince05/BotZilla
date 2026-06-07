@@ -686,13 +686,102 @@ async def cmd_update(client: Client, message: Message):
             json.dump({"chat_id": chat_id}, f)
         
         await asyncio.sleep(1)
-        # Properly stop Pyrogram before restart (critical for MTProto session)
-        await app.stop()
         stop_tunnel()
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
     except Exception as e:
         await status_msg.edit_text(f"Update failed...")
+
+
+# ── RAW TELEGRAM API (no Pyrogram needed) ──────────────────────
+import urllib.request
+import urllib.parse
+
+def _tg_raw_send(chat_id, text):
+    """Send message via raw Bot API. Returns message_id or None."""
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    data = urllib.parse.urlencode({"chat_id": chat_id, "text": text}).encode()
+    try:
+        req = urllib.request.Request(url, data=data)
+        resp = urllib.request.urlopen(req, timeout=15)
+        result = json.loads(resp.read())
+        return result.get("result", {}).get("message_id")
+    except Exception as e:
+        logger.error(f"_tg_raw_send failed: {e}")
+        return None
+
+def _tg_raw_edit(chat_id, message_id, text):
+    """Edit message via raw Bot API."""
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageText"
+    data = urllib.parse.urlencode({
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text,
+        "disable_web_page_preview": "true",
+    }).encode()
+    try:
+        req = urllib.request.Request(url, data=data)
+        urllib.request.urlopen(req, timeout=15)
+    except Exception as e:
+        logger.error(f"_tg_raw_edit failed: {e}")
+
+
+async def main():
+    if not BOT_TOKEN or not API_ID or not API_HASH:
+        logger.error("BOT_TOKEN, API_ID, or API_HASH not found in .env file!")
+        return
+
+    # ── STEP 0: Instant startup message via raw API ──
+    restart_chat_id = None
+    restart_msg_id = None
+    if os.path.exists(RESTART_FLAG):
+        try:
+            with open(RESTART_FLAG, "r") as f:
+                data = json.load(f)
+            restart_chat_id = data.get("chat_id")
+            os.remove(RESTART_FLAG)
+        except Exception:
+            pass
+
+    if restart_chat_id:
+        logger.info(f"Sending startup message to {restart_chat_id}...")
+        restart_msg_id = _tg_raw_send(restart_chat_id, "Bot is running...")
+    elif OWNER_IDS:
+        restart_chat_id = OWNER_IDS[0]
+        restart_msg_id = _tg_raw_send(restart_chat_id, "Bot is running...")
+
+    # ── STEP 1: Download tools ──
+    try:
+        await ensure_tools()
+    except Exception as e:
+        logger.error(f"ensure_tools failed: {e}")
+
+    # ── STEP 2: Start Dashboard tunnel ──
+    try:
+        start_cloudflare_tunnel()
+    except Exception as e:
+        logger.error(f"start_cloudflare_tunnel failed: {e}")
+
+    # ── STEP 3: Start Pyrogram ──
+    await app.start()
+    logger.info("Bot started via Pyrogram MTProto...")
+
+    # ── STEP 4: Edit startup message with dashboard URL ──
+    if restart_chat_id and restart_msg_id:
+        for _ in range(30):
+            if tunnel_url:
+                break
+            await asyncio.sleep(1)
+
+        if tunnel_url:
+            _tg_raw_edit(restart_chat_id, restart_msg_id, f"Bot is running...\n\n{tunnel_url}")
+        else:
+            _tg_raw_edit(restart_chat_id, restart_msg_id, "Bot is running...\n\nURL not ready yet. Use /dashboard later..")
+
+    # Keep running
+    import pyrogram
+    await pyrogram.idle()
+    await app.stop()
 
 
 @app.on_message(filters.command("drm"))
@@ -930,86 +1019,19 @@ async def handle_callback(client: Client, query):
         else:
             await query.answer("Show not found in dashboard!", show_alert=True)
 
-async def main():
-    if not BOT_TOKEN or not API_ID or not API_HASH:
-        logger.error("BOT_TOKEN, API_ID, or API_HASH not found in .env file!")
-        return
-
-    try:
-        await ensure_tools()
-    except Exception as e:
-        logger.error(f"ensure_tools failed: {e}")
-
-    # Start Dashboard tunnel
-    try:
-        start_cloudflare_tunnel()
-    except Exception as e:
-        logger.error(f"start_cloudflare_tunnel failed: {e}")
-    
-    await app.start()
-    logger.info("Bot started via Pyrogram MTProto...")
-    await asyncio.sleep(2)
-
-    # Send startup message (like Hello bot's post_init)
-    try:
-        await send_startup_message()
-    except Exception as e:
-        logger.error(f"send_startup_message failed: {e}")
-
-    # Keep running
-    import pyrogram
-    await pyrogram.idle()
-    await app.stop()
-
-async def send_startup_message():
-    """Send 'Bot is running...' then edit with dashboard URL"""
-    # Determine where to send
-    chat_id = None
-    if os.path.exists(RESTART_FLAG):
-        try:
-            with open(RESTART_FLAG, "r") as f:
-                data = json.load(f)
-            chat_id = data.get("chat_id")
-            os.remove(RESTART_FLAG)
-        except Exception:
-            pass
-    
-    # Fallback to first owner if no restart flag
-    if not chat_id and OWNER_IDS:
-        chat_id = OWNER_IDS[0]
-    
-    if not chat_id:
-        logger.error("No chat_id for startup message")
-        return
-    
-    try:
-        msg = await app.send_message(chat_id=int(chat_id), text="Bot is running...")
-        
-        # Wait for tunnel URL
-        for _ in range(30):
-            if tunnel_url:
-                break
-            await asyncio.sleep(1)
-        
-        if tunnel_url:
-            await msg.edit_text(f"Bot is running...\n\n{tunnel_url}", disable_web_page_preview=True)
-        else:
-            await msg.edit_text("Bot is running...\n\nURL not ready yet. Use /dashboard later..")
-    except Exception as e:
-        logger.error(f"Failed to send startup message: {e}")
-
 if __name__ == "__main__":
     try:
         app.run(main())
     except Exception as e:
         logger.error(f"FATAL CRASH: {e}")
-        # Try to notify owner about the crash
         import traceback
         crash_info = traceback.format_exc()
         logger.error(crash_info)
-        # Write crash log to file
         try:
             with open(os.path.join(BOT_DIR, "crash.log"), "w") as f:
                 f.write(crash_info)
         except:
             pass
+        # Notify owner about crash via raw API
+        if OWNER_IDS:
+            _tg_raw_send(OWNER_IDS[0], f"Bot CRASHED!\n\n{str(e)[:500]}")
