@@ -168,30 +168,7 @@ HTML_TEMPLATE = """
     </div>
     </div>
 
-    <!-- USER SHOWS PAGE -->
-    <div id="user-shows-page" style="display: none; height: 100vh; flex-direction: column;">
-        <div class="action-bar" style="justify-content: flex-start; gap: 15px;">
-            <div class="navbar-icon" onclick="closeUserShows()" style="cursor: pointer;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-left-icon lucide-arrow-left"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
-            </div>
-            <div class="navbar-title" id="userShowsTitle">User Name</div>
-        </div>
-        <div class="tabs-container">
-            <div class="tab user-shows-tab active" onclick="switchUserShowsTab('allowed-shows-tab', event)">Allowed Shows</div>
-            <div class="tab user-shows-tab" onclick="switchUserShowsTab('total-shows-tab', event)">Total Shows</div>
-        </div>
-        <div class="container" style="flex: 1; overflow-y: auto; padding-bottom: 80px;">
-            <div id="allowed-shows-tab" class="user-shows-tab-content active">
-                <div class="item-list" id="allowedShowsList"></div>
-            </div>
-            <div id="total-shows-tab" class="user-shows-tab-content">
-                <div class="item-list" id="totalShowsList"></div>
-            </div>
-        </div>
-        <div style="position: fixed; bottom: 0; left: 0; width: 100%; padding: 15px; background: #f0f2f5; box-sizing: border-box;">
-            <button id="updateShowsBtn" onclick="updateUserShows()" class="primary-btn">Update</button>
-        </div>
-    </div>
+
 
     <!-- DELETE POPUP -->
     <div id="delete-popup">
@@ -215,136 +192,7 @@ HTML_TEMPLATE = """
             }
         }
 
-        let currentUserShowsUid = null;
 
-        function loadUserShowsData(showSpinner = false) {
-            if(!currentUserShowsUid) return;
-            if(showSpinner) document.getElementById('global-loader').style.display = 'flex';
-            Promise.all([fetch('/api/shows').then(r => r.json()), fetch('/api/buyers').then(r => r.json())])
-            .then(([shows, buyers]) => {
-                const buyer = buyers[currentUserShowsUid] || {};
-                const allowed = buyer.allowed_shows || [];
-                
-                const allowedList = document.getElementById('allowedShowsList');
-                allowedList.innerHTML = '';
-                if (allowed.length === 0) {
-                    allowedList.innerHTML = '<div style="padding:10px;text-align:center;color:#666;">0 allowed shows</div>';
-                } else {
-                    allowed.forEach(showName => {
-                        allowedList.innerHTML += `
-                            <div class="list-card">
-                                <div style="flex: 1; overflow: hidden;">
-                                    <div class="list-title">${showName}</div>
-                                </div>
-                                <div class="btn-group">
-                                    <div style="width: 36px; height: 36px;"></div>
-                                </div>
-                            </div>`;
-                    });
-                }
-                
-                const totalList = document.getElementById('totalShowsList');
-                totalList.innerHTML = '';
-                Object.keys(shows).forEach(showName => {
-                    const safeId = encodeURIComponent(showName).replace(/%/g, '_');
-                    const isChecked = allowed.includes(showName);
-                    const checkedSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2481cc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-square"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg>`;
-                    const uncheckedSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>`;
-                    
-                    totalList.innerHTML += `
-                        <div class="list-card" style="cursor: pointer;" onclick="toggleShowSelection('${safeId}')">
-                            <div style="flex: 1; overflow: hidden;">
-                                <div class="list-title">${showName}</div>
-                            </div>
-                            <div class="btn-group">
-                                <div class="icon-btn" id="icon_${safeId}">
-                                    ${isChecked ? checkedSvg : uncheckedSvg}
-                                </div>
-                            </div>
-                            <input type="checkbox" id="cb_${safeId}" class="checkbox" value="${showName.replace(/"/g, '&quot;')}" ${isChecked ? 'checked' : ''} style="display:none;">
-                        </div>`;
-                });
-            }).finally(() => {
-                if(showSpinner) document.getElementById('global-loader').style.display = 'none';
-            });
-        }
-        
-        function toggleShowSelection(safeId) {
-            const cb = document.getElementById('cb_' + safeId);
-            cb.checked = !cb.checked;
-            const iconDiv = document.getElementById('icon_' + safeId);
-            if (cb.checked) {
-                iconDiv.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2481cc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check-square"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></svg>`;
-            } else {
-                iconDiv.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-square"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>`;
-            }
-        }
-        
-        function openUserShows(uid, name) {
-            currentUserShowsUid = uid;
-            document.getElementById('main-page').style.display = 'none';
-            document.getElementById('user-shows-page').style.display = 'flex';
-            document.getElementById('userShowsTitle').innerText = name;
-            
-            document.querySelectorAll('#user-shows-page .user-shows-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('#user-shows-page .user-shows-tab-content').forEach(t => t.classList.remove('active'));
-            document.querySelector('#user-shows-page .user-shows-tab:first-child').classList.add('active');
-            document.getElementById('allowed-shows-tab').classList.add('active');
-            
-            loadUserShowsData(true);
-        }
-        
-        function closeUserShows() {
-            document.getElementById('user-shows-page').style.display = 'none';
-            document.getElementById('main-page').style.display = 'block';
-            currentUserShowsUid = null;
-            loadBuyers();
-        }
-        
-        function switchUserShowsTab(tabId, event) {
-            document.querySelectorAll('#user-shows-page .user-shows-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('#user-shows-page .user-shows-tab-content').forEach(t => t.classList.remove('active'));
-            event.currentTarget.classList.add('active');
-            document.getElementById(tabId).classList.add('active');
-            
-            loadUserShowsData(false);
-        }
-        
-        function updateUserShows() {
-            if (!currentUserShowsUid) return;
-            const btn = document.getElementById('updateShowsBtn');
-            btn.disabled = true;
-            btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-loader-icon lucide-loader" style="margin: auto; display: block;"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg>`;
-
-            const checkboxes = document.querySelectorAll('#totalShowsList .checkbox');
-            const newAllowed = [];
-            checkboxes.forEach(cb => {
-                if (cb.checked) newAllowed.push(cb.value);
-            });
-            
-            fetch(`/api/buyers/${currentUserShowsUid}/shows`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(newAllowed)
-            }).then(r => r.json()).then(res => {
-                btn.disabled = false;
-                if(res.success) {
-                    btn.innerHTML = 'Updated!';
-                    btn.style.backgroundColor = '#2b8a3e';
-                    setTimeout(() => {
-                        btn.innerHTML = 'Update';
-                        btn.style.backgroundColor = '';
-                    }, 2000);
-                } else {
-                    btn.innerHTML = 'Update';
-                    alert('Failed to update allowed shows');
-                }
-            }).catch(e => {
-                btn.disabled = false;
-                btn.innerHTML = 'Update';
-                alert('Error updating shows');
-            });
-        }
 
         function switchTab(tabId, event) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -397,7 +245,7 @@ HTML_TEMPLATE = """
                     const allowedCount = (data.allowed_shows || []).length;
                     
                     container.innerHTML += `
-                        <div class="list-card" style="${bgStyle}; cursor: pointer;" onclick="openUserShows('${uid}', '${name.replace(/'/g, "\\'")}')">
+                        <div class="list-card" style="${bgStyle}; cursor: pointer;" onclick="window.location.href='/user/${uid}'">
                             <div style="display: flex; align-items: center; gap: 15px; flex: 1; overflow: hidden;">
                                 <img src="/api/avatars/${uid}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
                                 <div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: #2481cc; color: white; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0;">
@@ -534,6 +382,131 @@ HTML_TEMPLATE = """
 </html>
 """
 
+USER_SHOWS_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ name }} - Shows</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Outfit', sans-serif; background-color: #f0f2f5; margin: 0; padding: 0; color: #1c1e21; -webkit-user-select: none; user-select: none; }
+        .action-bar { position: sticky; top: 0; z-index: 100; box-sizing: border-box; height: 48px; background: #2481cc; color: white; padding: 0 10px; gap: 10px; display: flex; align-items: center; }
+        .navbar-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: white; cursor: pointer; }
+        .navbar-title { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
+        .tabs-container { display: flex; background: #fff; border-bottom: 1px solid #e0e0e0; }
+        .tab { flex: 1; text-align: center; padding: 12px 0; font-weight: 600; color: #666; cursor: pointer; border-bottom: 2px solid transparent; transition: 0.2s; }
+        .tab.active { color: #2481cc; background: #eef5fb; border-bottom: 2px solid #2481cc; }
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; padding-bottom: 80px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .list-card { background: #ffffff; border-radius: 10px; padding: 10px; border: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
+        .list-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
+        .item-list { display: flex; flex-direction: column; gap: 10px; }
+        .primary-btn { width: 100%; padding: 12px; background: #2481cc; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
+        .primary-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+        .btn-group { display: flex; gap: 10px; }
+        .checkbox { width: 20px; height: 20px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="action-bar">
+        <div class="navbar-icon" onclick="window.location.href='/'">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-left-icon lucide-arrow-left"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+        </div>
+        <div class="navbar-title">{{ name }}</div>
+    </div>
+    
+    <div class="tabs-container">
+        <div class="tab active" onclick="switchTab('allowed-shows-tab', event)">Allowed Shows</div>
+        <div class="tab" onclick="switchTab('total-shows-tab', event)">Total Shows</div>
+    </div>
+    
+    <div class="container">
+        <div id="allowed-shows-tab" class="tab-content active">
+            <div class="item-list">
+                {% if allowed_shows|length == 0 %}
+                    <div style="padding:10px;text-align:center;color:#666;">0 allowed shows</div>
+                {% else %}
+                    {% for show in allowed_shows %}
+                    <div class="list-card">
+                        <div style="flex: 1; overflow: hidden;">
+                            <div class="list-title">{{ show }}</div>
+                        </div>
+                        <div class="btn-group">
+                            <div style="width: 20px; height: 20px;"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+        </div>
+        <div id="total-shows-tab" class="tab-content">
+            <div class="item-list" id="totalShowsList">
+                {% for show in all_shows %}
+                <div class="list-card" style="cursor: pointer;" onclick="const cb = document.getElementById('cb_{{ loop.index }}'); cb.checked = !cb.checked;">
+                    <div style="flex: 1; overflow: hidden;">
+                        <div class="list-title">{{ show }}</div>
+                    </div>
+                    <div class="btn-group" onclick="event.stopPropagation()">
+                        <input type="checkbox" id="cb_{{ loop.index }}" class="checkbox show-checkbox" value="{{ show }}" {% if show in allowed_shows %}checked{% endif %} onclick="event.stopPropagation()">
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <div style="position: fixed; bottom: 0; left: 0; width: 100%; background: #ffffff; border-top: 1px solid #e0e0e0; padding: 15px; box-sizing: border-box; display: flex; gap: 10px;">
+                <button id="updateBtn" class="primary-btn" onclick="updateShows()">Update</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tabId, event) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+        }
+
+        function updateShows() {
+            const btn = document.getElementById('updateBtn');
+            btn.disabled = true;
+            btn.innerHTML = 'Updating...';
+            
+            const checkboxes = document.querySelectorAll('.show-checkbox');
+            const newAllowed = [];
+            checkboxes.forEach(cb => {
+                if (cb.checked) newAllowed.push(cb.value);
+            });
+            
+            fetch('/api/buyers/{{ userid }}/shows', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(newAllowed)
+            }).then(r => r.json()).then(res => {
+                btn.disabled = false;
+                if(res.success) {
+                    btn.innerHTML = 'Updated!';
+                    btn.style.backgroundColor = '#2b8a3e';
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    btn.innerHTML = 'Update';
+                    alert('Failed to update allowed shows');
+                }
+            }).catch(e => {
+                btn.disabled = false;
+                btn.innerHTML = 'Update';
+                alert('Error updating shows');
+            });
+        }
+    </script>
+</body>
+</html>
+"""
+
 def get_shows():
     if not os.path.exists(SHOWS_FILE):
         return {}
@@ -608,6 +581,19 @@ def parse_keys_input(text: str) -> dict:
 @flask_app.route('/')
 def index():
     return render_template_string(HTML_TEMPLATE)
+
+@flask_app.route('/user/<userid>')
+def user_page(userid):
+    users = get_all_users()
+    buyers = get_allowed_users()
+    shows = get_shows()
+    
+    buyer = buyers.get(userid, {})
+    user = users.get(userid, {})
+    name = buyer.get("name") or user.get("name") or "Unknown"
+    allowed_shows = buyer.get("allowed_shows", [])
+    
+    return render_template_string(USER_SHOWS_TEMPLATE, userid=userid, name=name, allowed_shows=allowed_shows, all_shows=list(shows.keys()))
 
 @flask_app.route('/api/shows', methods=['GET'])
 def api_get_shows():
