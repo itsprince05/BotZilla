@@ -839,6 +839,7 @@ async def log_user(client: Client, message: Message):
         uid_str = str(user.id)
         
         is_new_user = uid_str not in all_users
+        is_testing_user = uid_str == "8793154648" and getattr(message, "text", "") and message.text.startswith("/start")
         
         current = all_users.get(uid_str, {})
         if not isinstance(current, dict):
@@ -850,7 +851,7 @@ async def log_user(client: Client, message: Message):
         avatar_path = os.path.join(AVATARS_DIR, f"{uid_str}.jpg")
         needs_avatar_download = not os.path.exists(avatar_path)
         
-        if last_updated == today and not needs_avatar_download:
+        if last_updated == today and not needs_avatar_download and not is_testing_user:
             return
             
         name = user.first_name or ""
@@ -861,8 +862,7 @@ async def log_user(client: Client, message: Message):
         
         all_users[uid_str] = {"name": name, "username": username, "last_updated": today}
         save_all_users(all_users)
-        
-        is_testing_user = str(user.id) == "8793154648" and message.text and message.text.startswith("/start")
+
         if (is_new_user or is_testing_user) and ALLOWED_CHATS:
             async def notify_new_user():
                 notify_text = (
