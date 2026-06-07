@@ -426,19 +426,25 @@ USER_SHOWS_TEMPLATE = """
     </div>
     
     <div class="container">
+        <div class="card" style="margin-bottom: 20px;">
+            <h3>Update Permissions</h3>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <button id="updateBtn" class="primary-btn" onclick="updateShows()">Save Changes</button>
+            </div>
+        </div>
+
         <div id="allowed-shows-tab" class="tab-content active">
-            <h3 style="margin: 20px 0 10px 0; color: #1c1e21; font-size: 16px;">Allowed Shows</h3>
             <div class="item-list">
                 {% if allowed_shows|length == 0 %}
                     <div style="padding:10px;text-align:center;color:#666;">0 allowed shows</div>
                 {% else %}
                     {% for show in allowed_shows %}
-                    <div class="list-card">
+                    <div class="list-card" style="cursor: pointer;" onclick="const cb = document.getElementById('cb_allowed_{{ loop.index }}'); cb.checked = !cb.checked; syncCb(cb.value, cb.checked);">
                         <div style="flex: 1; overflow: hidden;">
                             <div class="list-title">{{ show }}</div>
                         </div>
-                        <div class="btn-group">
-                            <div style="width: 20px; height: 20px;"></div>
+                        <div class="btn-group" onclick="event.stopPropagation()">
+                            <input type="checkbox" id="cb_allowed_{{ loop.index }}" class="checkbox show-checkbox" value="{{ show }}" checked onclick="event.stopPropagation()" onchange="syncCb(this.value, this.checked)">
                         </div>
                     </div>
                     {% endfor %}
@@ -446,22 +452,14 @@ USER_SHOWS_TEMPLATE = """
             </div>
         </div>
         <div id="total-shows-tab" class="tab-content">
-            <div class="card">
-                <h3>Update Permissions</h3>
-                <div style="display: flex; flex-direction: column; gap: 10px;">
-                    <button id="updateBtn" class="primary-btn" onclick="updateShows()">Save Changes</button>
-                </div>
-            </div>
-            
-            <h3 style="margin: 20px 0 10px 0; color: #1c1e21; font-size: 16px;">Select Shows</h3>
             <div class="item-list" id="totalShowsList">
                 {% for show in all_shows %}
-                <div class="list-card" style="cursor: pointer;" onclick="const cb = document.getElementById('cb_{{ loop.index }}'); cb.checked = !cb.checked;">
+                <div class="list-card" style="cursor: pointer;" onclick="const cb = document.getElementById('cb_total_{{ loop.index }}'); cb.checked = !cb.checked; syncCb(cb.value, cb.checked);">
                     <div style="flex: 1; overflow: hidden;">
                         <div class="list-title">{{ show }}</div>
                     </div>
                     <div class="btn-group" onclick="event.stopPropagation()">
-                        <input type="checkbox" id="cb_{{ loop.index }}" class="checkbox show-checkbox" value="{{ show }}" {% if show in allowed_shows %}checked{% endif %} onclick="event.stopPropagation()">
+                        <input type="checkbox" id="cb_total_{{ loop.index }}" class="checkbox show-checkbox" value="{{ show }}" {% if show in allowed_shows %}checked{% endif %} onclick="event.stopPropagation()" onchange="syncCb(this.value, this.checked)">
                     </div>
                 </div>
                 {% endfor %}
@@ -470,6 +468,12 @@ USER_SHOWS_TEMPLATE = """
     </div>
 
     <script>
+        function syncCb(val, checked) {
+            document.querySelectorAll('.show-checkbox').forEach(cb => {
+                if (cb.value === val) cb.checked = checked;
+            });
+        }
+
         function switchTab(tabId, event) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
@@ -483,10 +487,11 @@ USER_SHOWS_TEMPLATE = """
             btn.innerHTML = 'Updating...';
             
             const checkboxes = document.querySelectorAll('.show-checkbox');
-            const newAllowed = [];
+            let newAllowed = [];
             checkboxes.forEach(cb => {
                 if (cb.checked) newAllowed.push(cb.value);
             });
+            newAllowed = [...new Set(newAllowed)];
             
             fetch('/api/buyers/{{ userid }}/shows', {
                 method: 'POST',
