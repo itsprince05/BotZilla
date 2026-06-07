@@ -19,7 +19,7 @@ import aiohttp
 from mutagen.mp4 import MP4
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram.enums import ChatType
+from pyrogram.enums import ChatType, ChatAction
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -1614,6 +1614,9 @@ def get_show_list_keyboard(shows_list, shows, page=1):
 @authorized_only
 async def cmd_shows_list(client: Client, message: Message):
     user_id = message.from_user.id
+    if download_flags.get(user_id):
+        await message.reply_text("A task is already running. Please wait it to finish...", quote=True)
+        return
     is_owner = OWNER_IDS and user_id in OWNER_IDS
     shows = get_shows()
     
@@ -1829,8 +1832,6 @@ async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
             start_ep = episodes[0]
             end_ep = min(episodes[1], total_ep)
             
-        status_msg = await client.send_message(chat_id, "Starting download process...")
-        
         for ep_num in range(start_ep, end_ep + 1):
             if not download_flags.get(user_id):
                 await client.send_message(chat_id, "Stopped")
@@ -1852,18 +1853,24 @@ async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
             seq_num = story.get("natural_sequence_number", ep_num)
             
             if not mpd_url:
+                await client.send_message(
+                    chat_id,
+                    f"URL not found for Ep - {seq_num}\n\n{story_title}\n\nContact Admin"
+                )
                 continue
                 
-            await status_msg.edit_text(f"Downloading...\n\n{story_title}")
+            status_msg = await client.send_message(chat_id, f"Downloading...\n\n{story_title}")
             
             mpd_content = await fetch_mpd(mpd_url)
             if not mpd_content:
+                await status_msg.delete()
                 continue
                 
             qualities = get_mpd_qualities(mpd_content)
             quality = "128k" if "128k" in qualities else (qualities[0] if qualities else "128k")
             audio_info = parse_mpd(mpd_content, quality)
             if not audio_info:
+                await status_msg.delete()
                 continue
                 
             mpd_base_url = mpd_url.rsplit("/", 1)[0]
@@ -1873,6 +1880,7 @@ async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
             encrypted_file = os.path.join(work_dir, "encrypted_audio.mp4")
             
             if not await download_file(audio_url, encrypted_file, None):
+                await status_msg.delete()
                 continue
                 
             output_name = f"Ep - {seq_num}"
@@ -1880,6 +1888,7 @@ async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
             
             success, error_msg = await run_decrypt(MP4DECRYPT_PATH, keys, encrypted_file, decrypted_file)
             if not success:
+                await status_msg.delete()
                 continue
                 
             os.remove(encrypted_file)
@@ -1891,6 +1900,7 @@ async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
                 fixed_file = decrypted_file
                 
             await status_msg.edit_text(f"Uploading...\n\n{story_title}")
+            await client.send_chat_action(chat_id, ChatAction.UPLOAD_AUDIO)
             
             audio_duration = 0
             try:
@@ -1906,6 +1916,7 @@ async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
                 caption=story_title,
                 file_name=f"{output_name}.m4a"
             )
+            await status_msg.delete()
             
             for f in os.listdir(work_dir):
                 try:
@@ -1917,7 +1928,7 @@ async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
             except:
                 pass
                 
-        await status_msg.edit_text("Complete")
+        await client.send_message(chat_id, "Completed...")
         
     except Exception as e:
         logger.error(f"Batch download error: {e}")
