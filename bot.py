@@ -398,9 +398,11 @@ USER_SHOWS_TEMPLATE = """
         .tabs-container { display: flex; background: #fff; border-bottom: 1px solid #e0e0e0; }
         .tab { flex: 1; text-align: center; padding: 12px 0; font-weight: 600; color: #666; cursor: pointer; border-bottom: 2px solid transparent; transition: 0.2s; }
         .tab.active { color: #2481cc; background: #eef5fb; border-bottom: 2px solid #2481cc; }
-        .container { max-width: 800px; margin: 0 auto; padding: 20px; padding-bottom: 80px; }
+        .container { max-width: 800px; margin: 0 auto; padding: 15px; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
+        .card { background: #ffffff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .card h3 { margin-top: 0; font-size: 16px; color: #1c1e21; margin-bottom: 5px; }
         .list-card { background: #ffffff; border-radius: 10px; padding: 10px; border: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
         .list-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
         .item-list { display: flex; flex-direction: column; gap: 10px; }
@@ -425,6 +427,7 @@ USER_SHOWS_TEMPLATE = """
     
     <div class="container">
         <div id="allowed-shows-tab" class="tab-content active">
+            <h3 style="margin: 20px 0 10px 0; color: #1c1e21; font-size: 16px;">Allowed Shows</h3>
             <div class="item-list">
                 {% if allowed_shows|length == 0 %}
                     <div style="padding:10px;text-align:center;color:#666;">0 allowed shows</div>
@@ -443,6 +446,14 @@ USER_SHOWS_TEMPLATE = """
             </div>
         </div>
         <div id="total-shows-tab" class="tab-content">
+            <div class="card">
+                <h3>Update Permissions</h3>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <button id="updateBtn" class="primary-btn" onclick="updateShows()">Save Changes</button>
+                </div>
+            </div>
+            
+            <h3 style="margin: 20px 0 10px 0; color: #1c1e21; font-size: 16px;">Select Shows</h3>
             <div class="item-list" id="totalShowsList">
                 {% for show in all_shows %}
                 <div class="list-card" style="cursor: pointer;" onclick="const cb = document.getElementById('cb_{{ loop.index }}'); cb.checked = !cb.checked;">
@@ -454,9 +465,6 @@ USER_SHOWS_TEMPLATE = """
                     </div>
                 </div>
                 {% endfor %}
-            </div>
-            <div style="position: fixed; bottom: 0; left: 0; width: 100%; background: #ffffff; border-top: 1px solid #e0e0e0; padding: 15px; box-sizing: border-box; display: flex; gap: 10px;">
-                <button id="updateBtn" class="primary-btn" onclick="updateShows()">Update</button>
             </div>
         </div>
     </div>
