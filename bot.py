@@ -69,7 +69,7 @@ AVATARS_DIR = os.path.join(BOT_DIR, "avatars")
 ADMINS_FILE = os.path.join(BOT_DIR, "admins.json")
 os.makedirs(AVATARS_DIR, exist_ok=True)
 
-HTML_TEMPLATE = ""
+HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
