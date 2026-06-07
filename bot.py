@@ -69,7 +69,7 @@ AVATARS_DIR = os.path.join(BOT_DIR, "avatars")
 ADMINS_FILE = os.path.join(BOT_DIR, "admins.json")
 os.makedirs(AVATARS_DIR, exist_ok=True)
 
-HTML_TEMPLATE = """
+HTML_TEMPLATE = ""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -491,7 +491,7 @@ HTML_TEMPLATE = """
 </script>
 </body>
 </html>
-"""
+""
 
 def get_shows():
     if not os.path.exists(SHOWS_FILE):
@@ -582,7 +582,7 @@ def api_add_show():
         return jsonify({"success": False, "error": "Name required"})
     
     shows = get_shows()
-    keys_dict = parse_keys_input(data.get('keys_text', '') or data.get('keys', ''))
+    keys_dict = parse_keys_input(data.get('keys_text', ''))
     
     shows[name] = {
         "id": data.get('id', ''),
@@ -612,17 +612,6 @@ def api_toggle_buyer(userid):
     if userid in allowed:
         curr = allowed[userid].get("status", "active")
         allowed[userid]["status"] = "paused" if curr == "active" else "active"
-        save_allowed_users(allowed)
-        return jsonify({"success": True})
-    return jsonify({"success": False})
-
-@flask_app.route('/api/buyers/<userid>/shows', methods=['POST'])
-def api_update_buyer_shows(userid):
-    allowed = get_allowed_users()
-    if userid in allowed:
-        data = request.json
-        shows_list = data.get('shows', [])
-        allowed[userid]['shows'] = shows_list
         save_allowed_users(allowed)
         return jsonify({"success": True})
     return jsonify({"success": False})
@@ -1079,28 +1068,9 @@ async def cmd_start(client: Client, message: Message):
             "<b>Widevine DRM Downloader</b>\n\n"
             "<b>Commands</b>\n"
             "/drm — Start download\n"
-            "/shows — My shows\n"
             "/cancel — Cancel operation",
             quote=False,
         )
-
-@app.on_message(filters.command("shows"))
-@authorized_only
-async def cmd_shows(client: Client, message: Message):
-    uid_str = str(message.from_user.id)
-    allowed = get_allowed_users()
-    user_data = allowed.get(uid_str, {})
-    shows_list = user_data.get('shows', [])
-    
-    if not shows_list:
-        await message.reply_text("You have no allowed shows.", quote=False)
-        return
-    
-    text = "<b>Your Allowed Shows</b>\n\n"
-    for i, show_name in enumerate(shows_list, 1):
-        text += f"{i}. {show_name}\n"
-    
-    await message.reply_text(text, quote=False)
 
 @app.on_message(filters.command("admin"))
 @owner_only
