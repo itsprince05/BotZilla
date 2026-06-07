@@ -444,7 +444,10 @@ def api_delete_show(name):
 
 @flask_app.route('/api/buyers', methods=['GET'])
 def api_get_buyers():
-    return jsonify(get_allowed_users())
+    buyers = get_allowed_users()
+    owner_str_ids = [str(x) for x in OWNER_IDS]
+    filtered_buyers = {k: v for k, v in buyers.items() if k not in owner_str_ids}
+    return jsonify(filtered_buyers)
 
 @flask_app.route('/api/buyers/<userid>/toggle', methods=['POST'])
 def api_toggle_buyer(userid):
@@ -458,7 +461,10 @@ def api_toggle_buyer(userid):
 
 @flask_app.route('/api/users', methods=['GET'])
 def api_get_users():
-    return jsonify(get_all_users())
+    users = get_all_users()
+    owner_str_ids = [str(x) for x in OWNER_IDS]
+    filtered_users = {k: v for k, v in users.items() if k not in owner_str_ids}
+    return jsonify(filtered_users)
 
 @flask_app.route('/api/avatars/<uid>')
 def api_get_avatar(uid):
