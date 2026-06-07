@@ -53,6 +53,7 @@ dashboard_port = 5000
 # Conversation state
 # {user_id: {"mpd_url": str, "mpd_content": str}}
 user_states = {}
+download_flags = {}
 
 from flask import Flask, request, jsonify, render_template_string, send_file
 import threading
@@ -953,7 +954,7 @@ def check_tool(path: str) -> bool:
         return False
 
 
-async def download_file(url: str, output_path: str, status_msg: Message) -> bool:
+async def download_file(url: str, output_path: str, status_msg: Message = None) -> bool:
     connector = aiohttp.TCPConnector(limit=0, force_close=False, enable_cleanup_closed=True)
     timeout = aiohttp.ClientTimeout(total=600)
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
@@ -962,7 +963,7 @@ async def download_file(url: str, output_path: str, status_msg: Message) -> bool
         async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
             async with session.get(url, headers=headers, ssl=SSL_CTX) as response:
                 if response.status != 200:
-                    await status_msg.edit_text(f"Download failed — HTTP {response.status}")
+                    if status_msg: await status_msg.edit_text(f"Download failed — HTTP {response.status}")
                     return False
 
                 with open(output_path, "wb") as f:
@@ -970,11 +971,11 @@ async def download_file(url: str, output_path: str, status_msg: Message) -> bool
                         f.write(chunk)
 
         size_mb = round(os.path.getsize(output_path) / 1048576, 2)
-        await status_msg.edit_text(f"Downloaded — {size_mb} MB")
+        if status_msg: await status_msg.edit_text(f"Downloaded — {size_mb} MB")
         return True
 
     except Exception as e:
-        await status_msg.edit_text(f"Download error: {str(e)[:200]}")
+        if status_msg: await status_msg.edit_text(f"Download error: {str(e)[:200]}")
         if os.path.exists(output_path):
             os.remove(output_path)
         return False
@@ -1660,7 +1661,7 @@ async def showlist_pagination(client: Client, query):
 async def ignore_callback(client: Client, query):
     await query.answer()
 
-async def fetch_pocketfm_show_details(show_id: str):
+async def fetch_pocketfm_show_details(show_id: str, curr_ptr: int = 0):
     auth = get_pocketfm_auth()
     
     headers = {
@@ -1672,7 +1673,7 @@ async def fetch_pocketfm_show_details(show_id: str):
         "authorization": f"Bearer {auth['access_token']}"
     }
     
-    url = f"https://api.pocketfm.com/v2/content_api/show.get_details?show_id={show_id}&curr_ptr=0&info_level=full"
+    url = f"https://api.pocketfm.com/v2/content_api/show.get_details?show_id={show_id}&curr_ptr={curr_ptr}&info_level=full"
     
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=headers) as resp:
@@ -1729,12 +1730,13 @@ async def show_details_callback(client: Client, query):
     
     caption = (
         f"{title}\n\n"
-        f"Language {lang.capitalize()}\n\n"
+        f"Language - {lang.capitalize()}\n\n"
         f"{episodes} Episodes"
     )
     
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("Button 1", callback_data="ignore"), InlineKeyboardButton("Button 2", callback_data="ignore")]
+        [InlineKeyboardButton("All Episode", callback_data=f"dlall_{show_id}")],
+        [InlineKeyboardButton("Select Episode", callback_data=f"dlsel_{show_id}")]
     ])
     
     try:
@@ -1748,6 +1750,179 @@ async def show_details_callback(client: Client, query):
     except Exception as e:
         logger.error(f"Failed to send show photo: {e}")
         await query.message.edit_text("Failed to send show details.")
+
+@app.on_callback_query(filters.regex(r"^dlall_(.+)$"))
+@authorized_only
+async def dlall_callback(client: Client, query):
+    show_id = query.matches[0].group(1)
+    user_id = query.from_user.id
+    if download_flags.get(user_id):
+        await query.answer("A task is already running. Please wait it to finish...", show_alert=True)
+        return
+        
+    try:
+        await query.message.edit_reply_markup(reply_markup=None)
+    except:
+        pass
+    await client.send_message(query.message.chat.id, "Downloading all episodes...\n\nIf you want to cancel or stop the process just send /stop")
+    
+    download_flags[user_id] = True
+    asyncio.create_task(run_batch_download(client, query.message.chat.id, user_id, show_id, mode="all", episodes=[]))
+
+@app.on_callback_query(filters.regex(r"^dlsel_(.+)$"))
+@authorized_only
+async def dlsel_callback(client: Client, query):
+    show_id = query.matches[0].group(1)
+    user_id = query.from_user.id
+    if download_flags.get(user_id):
+        await query.answer("A task is already running. Please wait it to finish...", show_alert=True)
+        return
+        
+    try:
+        await query.message.edit_reply_markup(reply_markup=None)
+    except:
+        pass
+    
+    user_states[user_id] = {"step": "ASK_EPISODES", "show_id": show_id}
+    await client.send_message(
+        query.message.chat.id,
+        "Send episode number which you want to download...\n\n"
+        "Single 1\n"
+        "Multiple 1 10"
+    )
+
+@app.on_message(filters.command("stop"))
+@authorized_only
+async def cmd_stop(client: Client, message: Message):
+    user_id = message.from_user.id
+    if download_flags.get(user_id):
+        download_flags[user_id] = False
+    else:
+        await message.reply_text("No active process to stop.")
+
+async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
+    try:
+        shows = get_shows()
+        keys = {}
+        for name, data in shows.items():
+            if data.get("id") == show_id:
+                keys = data.get("keys", {})
+                break
+                
+        if not keys:
+            await client.send_message(chat_id, "Keys not found for this show!")
+            download_flags[user_id] = False
+            return
+
+        data = await fetch_pocketfm_show_details(show_id)
+        if not data or data.get("status") != 1:
+            await client.send_message(chat_id, "Failed to fetch show details.")
+            download_flags[user_id] = False
+            return
+            
+        total_ep = data.get("result", [{}])[0].get("episodes_count", 0)
+        
+        if mode == "all":
+            start_ep = 1
+            end_ep = total_ep
+        else:
+            start_ep = episodes[0]
+            end_ep = min(episodes[1], total_ep)
+            
+        status_msg = await client.send_message(chat_id, "Starting download process...")
+        
+        for ep_num in range(start_ep, end_ep + 1):
+            if not download_flags.get(user_id):
+                await client.send_message(chat_id, "Stopped")
+                download_flags[user_id] = False
+                return
+                
+            data = await fetch_pocketfm_show_details(show_id, ep_num - 1)
+            if not data or data.get("status") != 1:
+                continue
+                
+            result = data.get("result", [{}])[0]
+            stories = result.get("stories", [])
+            if not stories:
+                continue
+                
+            story = stories[0]
+            mpd_url = story.get("media_url_enc")
+            story_title = story.get("story_title", f"Ep - {ep_num}")
+            seq_num = story.get("natural_sequence_number", ep_num)
+            
+            if not mpd_url:
+                continue
+                
+            await status_msg.edit_text(f"Downloading...\n\n{story_title}")
+            
+            mpd_content = await fetch_mpd(mpd_url)
+            if not mpd_content:
+                continue
+                
+            qualities = get_mpd_qualities(mpd_content)
+            quality = "128k" if "128k" in qualities else (qualities[0] if qualities else "128k")
+            audio_info = parse_mpd(mpd_content, quality)
+            if not audio_info:
+                continue
+                
+            mpd_base_url = mpd_url.rsplit("/", 1)[0]
+            audio_url = f"{mpd_base_url}/{audio_info['file']}"
+            
+            work_dir = tempfile.mkdtemp(prefix="drm_")
+            encrypted_file = os.path.join(work_dir, "encrypted_audio.mp4")
+            
+            if not await download_file(audio_url, encrypted_file, None):
+                continue
+                
+            output_name = f"Ep - {seq_num}"
+            decrypted_file = os.path.join(work_dir, f"{output_name}.m4a")
+            
+            success, error_msg = await run_decrypt(MP4DECRYPT_PATH, keys, encrypted_file, decrypted_file)
+            if not success:
+                continue
+                
+            os.remove(encrypted_file)
+            
+            fixed_file = os.path.join(work_dir, f"{output_name}_fixed.m4a")
+            await fix_m4a_duration(decrypted_file, fixed_file)
+            
+            if not os.path.exists(fixed_file):
+                fixed_file = decrypted_file
+                
+            await status_msg.edit_text(f"Uploading...\n\n{story_title}")
+            
+            audio_duration = 0
+            try:
+                audio_info_mp4 = MP4(fixed_file)
+                audio_duration = int(audio_info_mp4.info.length)
+            except Exception:
+                pass
+                
+            await client.send_audio(
+                chat_id=chat_id,
+                audio=fixed_file,
+                duration=audio_duration,
+                caption=story_title,
+                file_name=f"{output_name}.m4a"
+            )
+            
+            for f in os.listdir(work_dir):
+                try:
+                    os.remove(os.path.join(work_dir, f))
+                except:
+                    pass
+            try:
+                os.rmdir(work_dir)
+            except:
+                pass
+                
+        await status_msg.edit_text("Complete")
+        
+    except Exception as e:
+        logger.error(f"Batch download error: {e}")
+    finally:
+        download_flags[user_id] = False
 
 @app.on_message(filters.command("drm"))
 @authorized_only
@@ -1769,7 +1944,7 @@ async def drm_start(client: Client, message: Message):
     )
 
 
-@app.on_message(filters.text & ~filters.command(["start", "status", "cancel", "update", "drm", "shows_list", "allow", "remove", "dash", "dashboard"]))
+@app.on_message(filters.text & ~filters.command(["start", "status", "cancel", "stop", "update", "drm", "shows_list", "allow", "remove", "dash", "dashboard"]))
 @authorized_only
 async def handle_text(client: Client, message: Message):
     user_id = message.from_user.id
@@ -1778,6 +1953,36 @@ async def handle_text(client: Client, message: Message):
 
     state = user_states[user_id]
     step = state.get("step")
+    
+    if step == "ASK_EPISODES":
+        text = message.text.strip().lower()
+        parts = text.replace("single", "").replace("multiple", "").strip().split()
+        if not parts:
+            await message.reply_text("Invalid episode number...\n\nSend episode number which you want to download...\n\nSingle 1\nMultiple 1 10")
+            return
+            
+        try:
+            start_ep = int(parts[0])
+            end_ep = int(parts[1]) if len(parts) > 1 else start_ep
+            
+            show_id = state["show_id"]
+            data = await fetch_pocketfm_show_details(show_id)
+            if not data or data.get("status") != 1:
+                await message.reply_text("Failed to fetch show details. Cannot validate.")
+                del user_states[user_id]
+                return
+                
+            total_ep = data.get("result", [{}])[0].get("episodes_count", 0)
+            if end_ep > total_ep or start_ep < 1:
+                await message.reply_text("Invalid episode number...\n\nSend episode number which you want to download...\n\nSingle 1\nMultiple 1 10")
+                return
+                
+            download_flags[user_id] = True
+            asyncio.create_task(run_batch_download(client, message.chat.id, user_id, show_id, mode="select", episodes=[start_ep, end_ep]))
+            del user_states[user_id]
+        except:
+            await message.reply_text("Invalid episode number...\n\nSend episode number which you want to download...\n\nSingle 1\nMultiple 1 10")
+            return
 
     if step == "ASK_MPD":
         mpd_url = message.text.strip()
