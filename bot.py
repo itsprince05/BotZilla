@@ -98,7 +98,7 @@ HTML_TEMPLATE = """
         .primary-btn { width: 100%; padding: 12px; background: #2481cc; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
         .primary-btn:hover { background: #1e6eb0; }
         .item-list { display: flex; flex-direction: column; gap: 10px; }
-        .list-card { background: #ffffff; border-radius: 10px; padding: 10px; border: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; }
+        .list-card { background: #ffffff; border-radius: 10px; padding: 10px; border: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
         .list-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
         .list-subtitle { font-size: 13px; color: #666; margin-top: 5px; }
         .btn-group { display: flex; gap: 10px; }
@@ -328,10 +328,15 @@ HTML_TEMPLATE = """
                 body: JSON.stringify(newAllowed)
             }).then(r => r.json()).then(res => {
                 btn.disabled = false;
-                btn.innerHTML = 'Update';
                 if(res.success) {
-                    closeUserShows();
+                    btn.innerHTML = 'Updated!';
+                    btn.style.backgroundColor = '#2b8a3e';
+                    setTimeout(() => {
+                        btn.innerHTML = 'Update';
+                        btn.style.backgroundColor = '';
+                    }, 2000);
                 } else {
+                    btn.innerHTML = 'Update';
                     alert('Failed to update allowed shows');
                 }
             }).catch(e => {
@@ -392,7 +397,7 @@ HTML_TEMPLATE = """
                     const allowedCount = (data.allowed_shows || []).length;
                     
                     container.innerHTML += `
-                        <div class="list-card" style="${bgStyle}; cursor: pointer;" onclick="openUserShows('${uid}', '${name}')">
+                        <div class="list-card" style="${bgStyle}; cursor: pointer;" onclick="openUserShows('${uid}', '${name.replace(/'/g, "\\'")}')">
                             <div style="display: flex; align-items: center; gap: 15px; flex: 1; overflow: hidden;">
                                 <img src="/api/avatars/${uid}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
                                 <div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: #2481cc; color: white; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0;">
