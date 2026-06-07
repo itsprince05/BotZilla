@@ -501,7 +501,7 @@ USER_SHOWS_TEMPLATE = """
             }).then(r => r.json()).then(res => {
                 btn.disabled = false;
                 if(res.success) {
-                    btn.innerHTML = 'Updated!';
+                    btn.innerHTML = 'Updated';
                     btn.style.backgroundColor = '#2b8a3e';
                     
                     const allowedList = res.shows || [];
@@ -604,7 +604,7 @@ SHOW_USERS_TEMPLATE = """
         function updateUsers() {
             const btn = document.getElementById('updateBtn');
             btn.disabled = true;
-            btn.innerHTML = 'Updating...';
+            btn.innerHTML = 'Updating';
             
             const checkboxes = document.querySelectorAll('.user-checkbox');
             let allowedUsers = [];
@@ -620,7 +620,7 @@ SHOW_USERS_TEMPLATE = """
             }).then(r => r.json()).then(res => {
                 btn.disabled = false;
                 if(res.success) {
-                    btn.innerHTML = 'Updated!';
+                    btn.innerHTML = 'Updated';
                     btn.style.backgroundColor = '#2b8a3e';
                     setTimeout(() => {
                         btn.innerHTML = 'Update';
@@ -732,9 +732,18 @@ def user_page(userid):
 @flask_app.route('/show/<name>')
 def show_page(name):
     buyers = get_allowed_users()
+    users = get_all_users()
     owner_str_ids = [str(x) for x in OWNER_IDS]
-    filtered_buyers = {k: v for k, v in buyers.items() if k not in owner_str_ids}
+    filtered_buyers = {}
     
+    for k, v in buyers.items():
+        if k not in owner_str_ids:
+            user_data = users.get(k, {})
+            merged = v.copy()
+            merged["name"] = v.get("name") or user_data.get("name") or "Unknown"
+            merged["username"] = user_data.get("username") or ""
+            filtered_buyers[k] = merged
+            
     return render_template_string(SHOW_USERS_TEMPLATE, show_name=name, buyers=filtered_buyers)
 
 @flask_app.route('/api/shows', methods=['GET'])
