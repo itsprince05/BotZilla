@@ -67,6 +67,7 @@ ALLOWED_USERS_FILE = os.path.join(BOT_DIR, "allowed_users.json")
 ALL_USERS_FILE = os.path.join(BOT_DIR, "all_users.json")
 AVATARS_DIR = os.path.join(BOT_DIR, "avatars")
 ADMINS_FILE = os.path.join(BOT_DIR, "admins.json")
+POCKETFM_AUTH_FILE = os.path.join(BOT_DIR, "pocketfm_auth.json")
 os.makedirs(AVATARS_DIR, exist_ok=True)
 
 HTML_TEMPLATE = """
@@ -394,7 +395,7 @@ USER_SHOWS_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ name }} - Shows</title>
+    <title>BotZilla Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Outfit', sans-serif; background-color: #f0f2f5; margin: 0; padding: 0; color: #1c1e21; -webkit-user-select: none; user-select: none; }
@@ -423,7 +424,7 @@ USER_SHOWS_TEMPLATE = """
         <div class="navbar-icon" onclick="window.location.href='/'">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-left-icon lucide-arrow-left"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
         </div>
-        <div class="navbar-title">{{ name }}</div>
+        <div class="navbar-title">BotZilla Dashboard</div>
     </div>
     
     <div class="tabs-container">
@@ -550,7 +551,7 @@ SHOW_USERS_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ show_name }} - Users</title>
+    <title>BotZilla Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Outfit', sans-serif; background-color: #f0f2f5; margin: 0; padding: 0; color: #1c1e21; -webkit-user-select: none; user-select: none; }
@@ -573,7 +574,7 @@ SHOW_USERS_TEMPLATE = """
         <div class="navbar-icon" onclick="window.location.href='/'">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-left-icon lucide-arrow-left"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
         </div>
-        <div class="navbar-title">{{ show_name }}</div>
+        <div class="navbar-title">BotZilla Dashboard</div>
     </div>
     
     <div class="container">
@@ -703,6 +704,24 @@ def get_all_users():
 def save_all_users(users):
     with open(ALL_USERS_FILE, 'w') as f:
         json.dump(users, f, indent=4)
+
+def get_pocketfm_auth():
+    if not os.path.exists(POCKETFM_AUTH_FILE):
+        default_auth = {
+            "uid": "a5fe3866d35c4094011d4e2d7020a4a3d0d0eef3",
+            "device_id": "SBDIHHLLYX3",
+            "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjYXRlZ29yeSI6ImFjY2VzcyIsImRldmljZV9pZCI6IlNCRElISExMWVgzIiwiZXhwaXJ5IjoxNzgwOTgxNjQ4LCJpYXQiOjE3ODA4MDg4NDgsImxvY2FsZSI6IklOIiwicGxhdGZvcm0iOiJhbmRyb2lkIiwicm9sZSI6Ikxpc3RlbmVyIiwidGVuYW50IjoicG9ja2V0X2ZtIiwidWlkIjoiYTVmZTM4NjZkMzVjNDA5NDAxMWQ0ZTJkNzAyMGE0YTNkMGQwZWVmMyIsInZlcnNpb24iOiJ2MiJ9.bjTZL8S-clyUXNLK7PQyoHQ2NRxgygN_i4wDHwnJ0-s",
+            "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjYXRlZ29yeSI6InJlZnJlc2giLCJkZXZpY2VfaWQiOiJTQkRJSEhMTFlYMyIsImV4cGlyeSI6MTc5NTE1ODkxNiwiaWF0IjoxNzc5NjA2OTE2LCJsb2NhbGUiOiJJTiIsInBsYXRmb3JtIjoiYW5kcm9pZCIsInRlbmFudCI6InBvY2tldF9mbSIsInVpZCI6ImE1ZmUzODY2ZDM1YzQwOTQwMTFkNGUyZDcwMjBhNGEzZDBkMGVlZjMiLCJ2ZXJzaW9uIjoidjIifQ.PmsLPVv4KP2vF11cpyh2NZ1-I91h2HRhENJyn-7rhNg"
+        }
+        with open(POCKETFM_AUTH_FILE, "w") as f:
+            json.dump(default_auth, f, indent=4)
+        return default_auth
+    with open(POCKETFM_AUTH_FILE, "r") as f:
+        return json.load(f)
+
+def save_pocketfm_auth(auth_data):
+    with open(POCKETFM_AUTH_FILE, "w") as f:
+        json.dump(auth_data, f, indent=4)
 
 def parse_keys_input(text: str) -> dict:
     import re
@@ -1277,19 +1296,14 @@ async def cmd_start(client: Client, message: Message):
     if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP] and (is_owner or is_admin):
         has_mp4decrypt = check_tool(MP4DECRYPT_PATH)
         await message.reply_text(
-            "<b>Widevine DRM Downloader (Pyrogram)</b>\n\n"
-            f"mp4decrypt: {'Ready' if has_mp4decrypt else 'Not Found'}\n"
-            f"Dashboard: {tunnel_url if tunnel_url else 'Starting...'}\n\n"
-            "<b>Commands</b>\n"
-            "/drm — Start download\n"
-            "/dash — Show Dashboard URL\n"
+            "Widevine DRM Downloader\n\n"
+            "Commands\n"
+            "/dashboard — Show Dashboard URL\n"
             "/allow — Allow user\n"
-            "/remove — Remove user\n"
-            "/cancel — Cancel operation\n\n"
-            "<b>Owner Only</b>\n"
+            "/remove — Remove user\n\n"
+            "Owner Only\n"
             "/admin — Add admin\n"
             "/radmin — Remove admin\n"
-            "/status — Check tools\n"
             "/update — Pull and restart",
             quote=False,
         )
@@ -1564,7 +1578,7 @@ async def main():
 
 import math
 
-def get_show_list_keyboard(shows_list, page=1):
+def get_show_list_keyboard(shows_list, shows, page=1):
     items_per_page = 10
     total_shows = len(shows_list)
     total_pages = math.ceil(total_shows / items_per_page)
@@ -1578,7 +1592,8 @@ def get_show_list_keyboard(shows_list, page=1):
     
     keyboard = []
     for show in current_shows:
-        keyboard.append([InlineKeyboardButton(show, callback_data="ignore")])
+        show_id = shows.get(show, {}).get("id", "0")
+        keyboard.append([InlineKeyboardButton(show, callback_data=f"showdt_{show_id}")])
         
     if total_pages > 1:
         nav_row = []
@@ -1611,7 +1626,7 @@ async def cmd_shows_list(client: Client, message: Message):
         return
         
     shows_list = sorted(list(shows.keys()), key=lambda x: x.lower())
-    keyboard = get_show_list_keyboard(shows_list, page=1)
+    keyboard = get_show_list_keyboard(shows_list, shows, page=1)
     
     await message.reply_text(
         "You can download the episodes of below shows...\n",
@@ -1633,7 +1648,7 @@ async def showlist_pagination(client: Client, query):
         shows = {k: v for k, v in shows.items() if k in user_allowed}
         
     shows_list = sorted(list(shows.keys()), key=lambda x: x.lower())
-    keyboard = get_show_list_keyboard(shows_list, page=page)
+    keyboard = get_show_list_keyboard(shows_list, shows, page=page)
     
     await query.message.edit_text(
         "You can download the episodes of below shows...\n",
@@ -1644,6 +1659,95 @@ async def showlist_pagination(client: Client, query):
 @app.on_callback_query(filters.regex(r"^ignore$"))
 async def ignore_callback(client: Client, query):
     await query.answer()
+
+async def fetch_pocketfm_show_details(show_id: str):
+    auth = get_pocketfm_auth()
+    
+    headers = {
+        "Host": "api.pocketfm.com",
+        "uid": auth["uid"],
+        "version-name": "9.1.3",
+        "platform-version": "29",
+        "app-version": "2013",
+        "authorization": f"Bearer {auth['access_token']}"
+    }
+    
+    url = f"https://api.pocketfm.com/v2/content_api/show.get_details?show_id={show_id}&curr_ptr=0&info_level=full"
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as resp:
+            data = await resp.json()
+            
+            if data.get("code") == "TOKEN_EXPIRED":
+                refresh_url = "https://iam.pocketfm.com/v1/auth/refresh"
+                refresh_headers = {
+                    "Host": "iam.pocketfm.com",
+                    "uid": auth["uid"],
+                    "platform": "android",
+                    "device-id": auth["device_id"],
+                    "app-name": "pocket_fm",
+                    "version-name": "9.1.3",
+                    "platform-version": "29",
+                    "app-version": "2013"
+                }
+                refresh_payload = {
+                    "refresh_token": auth["refresh_token"]
+                }
+                
+                async with session.post(refresh_url, headers=refresh_headers, json=refresh_payload) as r_resp:
+                    r_data = await r_resp.json()
+                    
+                    if "access_token" in r_data and "refresh_token" in r_data:
+                        auth["access_token"] = r_data["access_token"]
+                        auth["refresh_token"] = r_data["refresh_token"]
+                        save_pocketfm_auth(auth)
+                        
+                        headers["authorization"] = f"Bearer {auth['access_token']}"
+                        async with session.get(url, headers=headers) as new_resp:
+                            data = await new_resp.json()
+                    else:
+                        return None
+                        
+            return data
+
+@app.on_callback_query(filters.regex(r"^showdt_(.+)$"))
+@authorized_only
+async def show_details_callback(client: Client, query):
+    show_id = query.matches[0].group(1)
+    await query.message.edit_text("Getting details of selected show...")
+    
+    data = await fetch_pocketfm_show_details(show_id)
+    if not data or data.get("status") != 1:
+        await query.message.edit_text("Failed to fetch show details. Please try again.")
+        return
+        
+    result = data.get("result", [{}])[0]
+    title = result.get("show_title", "Unknown")
+    lang = result.get("language", "Unknown")
+    episodes = result.get("episodes_count", 0)
+    image_url = result.get("image_url", "")
+    
+    caption = (
+        f"{title}\n\n"
+        f"Language {lang.capitalize()}\n\n"
+        f"{episodes} Episodes"
+    )
+    
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Button 1", callback_data="ignore"), InlineKeyboardButton("Button 2", callback_data="ignore")]
+    ])
+    
+    try:
+        await client.send_photo(
+            chat_id=query.message.chat.id,
+            photo=image_url,
+            caption=caption,
+            reply_markup=keyboard
+        )
+        await query.message.edit_text("Details of selected show...")
+    except Exception as e:
+        logger.error(f"Failed to send show photo: {e}")
+        await query.message.edit_text("Failed to send show details.")
 
 @app.on_message(filters.command("drm"))
 @authorized_only
