@@ -169,19 +169,10 @@ HTML_TEMPLATE = """
                     const container = document.getElementById('showsTable');
                     container.innerHTML = '';
                     Object.entries(shows).forEach(([name, data]) => {
-                        let keysHtml = '';
-                        if (typeof data.keys === 'object') {
-                            keysHtml = Object.entries(data.keys).map(([kid, key]) => `${kid}:${key}`).join('<br>');
-                        } else {
-                            keysHtml = String(data.keys);
-                        }
-                        
                         container.innerHTML += `
                             <div class="show-card">
                                 <div style="flex: 1; overflow: hidden;">
                                     <div class="show-title">${name}</div>
-                                    <div class="show-id">ID: ${data.id || 'N/A'}</div>
-                                    <div class="show-keys">${keysHtml}</div>
                                 </div>
                                 <div class="delete-btn" onclick="showDeletePopup('${name}')">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
@@ -219,14 +210,39 @@ HTML_TEMPLATE = """
         });
 
         let itemToDelete = null;
+        let deleteTimer = null;
+        
         function showDeletePopup(name) {
             itemToDelete = name;
             document.getElementById('delete-popup').style.display = 'flex';
+            
+            const btn = document.getElementById('delete-btn-submit');
+            btn.disabled = true;
+            btn.style.opacity = '0.5';
+            btn.style.cursor = 'not-allowed';
+            
+            let count = 5;
+            btn.textContent = `Delete (${count})`;
+            
+            if (deleteTimer) clearInterval(deleteTimer);
+            deleteTimer = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    btn.textContent = `Delete (${count})`;
+                } else {
+                    clearInterval(deleteTimer);
+                    btn.textContent = 'Delete';
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                }
+            }, 1000);
         }
 
         function hideDeletePopup() {
             document.getElementById('delete-popup').style.display = 'none';
             itemToDelete = null;
+            if (deleteTimer) clearInterval(deleteTimer);
         }
 
         function confirmDelete() {
@@ -275,7 +291,9 @@ def index():
 
 @flask_app.route('/api/shows', methods=['GET'])
 def api_get_shows():
-    return jsonify(get_shows())
+    shows = get_shows()
+    sanitized = {name: {} for name in shows.keys()}
+    return jsonify(sanitized)
 
 @flask_app.route('/api/shows', methods=['POST'])
 def api_add_show():
@@ -516,7 +534,7 @@ async def ensure_tools():
     # Ensure cloudflared
     cf_path = os.path.join(BOT_DIR, "cloudflared.exe" if os.name == "nt" else "cloudflared")
     if not os.path.exists(cf_path):
-        logger.info("cloudflared not found. Downloading...")
+        logger.info("cloudflared not found.\nDownloading...")
         is_windows = os.name == "nt"
         if is_windows:
             url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
@@ -776,7 +794,7 @@ async def main():
         if tunnel_url:
             _tg_raw_edit(restart_chat_id, restart_msg_id, f"Bot is running...\n\n{tunnel_url}")
         else:
-            _tg_raw_edit(restart_chat_id, restart_msg_id, "Bot is running...\n\nURL not ready yet. Use /dashboard later..")
+            _tg_raw_edit(restart_chat_id, restart_msg_id, "Bot is running...\n\nURL not ready yet.\nUse /dashboard later...")
 
     # Keep running
     import pyrogram
