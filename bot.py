@@ -409,7 +409,7 @@ USER_SHOWS_TEMPLATE = """
         .container { max-width: 800px; margin: 0 auto; padding: 15px; padding-bottom: 80px; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .card { background: #ffffff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .card { background: #ffffff; border-radius: 12px; padding: 20px; }
         .card h3 { margin-top: 0; font-size: 16px; color: #1c1e21; margin-bottom: 5px; }
         .list-card { background: #ffffff; border-radius: 10px; padding: 10px; border: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
         .list-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
