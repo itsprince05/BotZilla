@@ -54,16 +54,20 @@ dashboard_port = 5000
 # {user_id: {"mpd_url": str, "mpd_content": str}}
 user_states = {}
 download_flags = {}
+stopped_flags = {}
 user_queues = {}
+active_downloads = {}
 global_download_semaphore = None
 
 async def process_user_queue(user_id):
+    processed_count = 0
     while True:
         task = await user_queues[user_id].get()
         if task is None:
             break
             
         try:
+            processed_count += 1
             client = task['client']
             chat_id = task['chat_id']
             show_id = task['show_id']
@@ -75,6 +79,14 @@ async def process_user_queue(user_id):
             logger.error(f"Queue error for {user_id}: {e}")
         finally:
             user_queues[user_id].task_done()
+            if user_queues[user_id].empty():
+                if not stopped_flags.get(user_id, False):
+                    if processed_count > 1:
+                        await client.send_message(chat_id, "All Completed...")
+                    else:
+                        await client.send_message(chat_id, "Completed...")
+                processed_count = 0
+                stopped_flags[user_id] = False
 
 from db import get_shows, save_shows, get_allowed_users, save_allowed_users, get_admins, save_admins, get_all_users, save_all_users, get_pocketfm_auth, save_pocketfm_auth
 from dashboard import start_flask
@@ -522,7 +534,8 @@ async def cmd_start(client: Client, message: Message):
         reply_msg = (
             f"Hey {name}\n\n"
             "Use below command to access bot\n\n"
-            "/show_list Get show list"
+            "/show_list Get show list\n"
+            "/running Check task list"
         )
         
         if buyer_data.get("set_cover"):
@@ -989,7 +1002,8 @@ async def dlall_callback(client: Client, query):
     except:
         pass
         
-    await user_queues[user_id].put({"client": client, "chat_id": query.message.chat.id, "show_id": show_id, "mode": "all", "episodes": []})
+    show_name = next((n for n, d in get_shows().items() if d.get("id") == show_id), "Unknown Show")
+    await user_queues[user_id].put({"client": client, "chat_id": query.message.chat.id, "show_id": show_id, "show_name": show_name, "mode": "all", "episodes": []})
     
     if download_flags.get(user_id):
         await query.answer(f"Added to waiting list...\nPosition {user_queues[user_id].qsize()}", show_alert=True)
@@ -1022,12 +1036,41 @@ async def dlsel_callback(client: Client, query):
         "Multiple 1 10"
     )
 
+@app.on_message(filters.command("running"))
+@authorized_only
+async def cmd_running(client: Client, message: Message):
+    user_id = message.from_user.id
+    running_info = active_downloads.get(user_id)
+    queue = user_queues.get(user_id)
+    
+    if not running_info and (not queue or queue.empty()):
+        await message.reply_text("No active process to stop...", quote=False)
+        return
+        
+    reply_lines = ["Running and waiting list...\n"]
+    
+    if running_info:
+        reply_lines.append(f"{running_info['show_name']}\n{running_info['remaining']} episode\n")
+        
+    if queue and not queue.empty():
+        for task in list(queue._queue):
+            show_name = task.get("show_name", "Unknown Show")
+            mode = task.get("mode", "all")
+            if mode == "all":
+                reply_lines.append(f"{show_name}\nAll episode\n")
+            else:
+                eps = task.get("episodes", [1, 1])
+                reply_lines.append(f"{show_name}\n{eps[1] - eps[0] + 1} episode\n")
+                
+    await message.reply_text("\n".join(reply_lines).strip(), quote=False)
+
 @app.on_message(filters.command("stop"))
 @authorized_only
 async def cmd_stop(client: Client, message: Message):
     user_id = message.from_user.id
     if download_flags.get(user_id):
         download_flags[user_id] = False
+        stopped_flags[user_id] = True
     
     if user_id in user_queues:
         while not user_queues[user_id].empty():
@@ -1095,7 +1138,9 @@ async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
             else:
                 await client.send_message(chat_id, f"Downloading Ep from {start_ep} - {end_ep}\n\nIf you want to cancel or stop the process just send /stop")
             
+        show_name = next((n for n, d in shows.items() if d.get("id") == show_id), "Unknown Show")
         for ep_num in range(start_ep, end_ep + 1):
+            active_downloads[user_id] = {"show_name": show_name, "remaining": (end_ep - ep_num + 1)}
             if not download_flags.get(user_id):
                 await client.send_message(chat_id, "Stopped")
                 download_flags[user_id] = False
@@ -1215,13 +1260,12 @@ async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
                 finally:
                     import shutil
                     shutil.rmtree(work_dir, ignore_errors=True)
-                
-        await client.send_message(chat_id, "Completed...")
         
     except Exception as e:
         logger.error(f"Batch download error: {e}")
     finally:
         download_flags[user_id] = False
+        active_downloads.pop(user_id, None)
 
 @app.on_message(filters.command("drm"))
 @authorized_only
@@ -1318,7 +1362,8 @@ async def handle_text(client: Client, message: Message):
                 del user_states[user_id]
                 return
                 
-            await user_queues[user_id].put({"client": client, "chat_id": message.chat.id, "show_id": show_id, "mode": "select", "episodes": [start_ep, end_ep]})
+            show_name = next((n for n, d in get_shows().items() if d.get("id") == show_id), "Unknown Show")
+            await user_queues[user_id].put({"client": client, "chat_id": message.chat.id, "show_id": show_id, "show_name": show_name, "mode": "select", "episodes": [start_ep, end_ep]})
             
             if download_flags.get(user_id):
                 await message.reply_text(f"Added to waiting list...\nPosition {user_queues[user_id].qsize()}")
