@@ -429,8 +429,9 @@ USER_SHOWS_TEMPLATE = """
     </div>
     
     <div class="tabs-container">
-        <div class="tab active" onclick="switchTab('allowed-shows-tab', event)">Allowed Shows</div>
-        <div class="tab" onclick="switchTab('total-shows-tab', event)">Total Shows</div>
+        <div class="tab active" onclick="switchTab('allowed-shows-tab', event)">Allowed</div>
+        <div class="tab" onclick="switchTab('total-shows-tab', event)">Total</div>
+        <div class="tab" onclick="switchTab('settings-tab', event)">Setting</div>
     </div>
     
     <div class="container">
@@ -466,11 +467,27 @@ USER_SHOWS_TEMPLATE = """
                 {% endfor %}
             </div>
         </div>
+        <div id="settings-tab" class="tab-content">
+            <div class="card" style="margin-bottom: 20px;">
+                <h3 style="margin-bottom: 10px;">User Name</h3>
+                <input type="text" id="userNameInput" value="{{ name }}" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0; box-sizing: border-box; margin-bottom: 20px; font-family: inherit; font-size: 15px;">
+                
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                    <input type="checkbox" id="cb_set_cover" class="checkbox" {% if set_cover %}checked{% endif %}>
+                    <label for="cb_set_cover" style="font-size: 15px; font-weight: 500; cursor: pointer;">Set Audio Cover</label>
+                </div>
+                
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" id="cb_set_artist" class="checkbox" {% if set_artist %}checked{% endif %}>
+                    <label for="cb_set_artist" style="font-size: 15px; font-weight: 500; cursor: pointer;">Set Artist Name</label>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div style="position: fixed; bottom: 0; left: 0; width: 100%; background: #ffffff; border-top: 1px solid #e0e0e0; padding: 15px; box-sizing: border-box; display: flex; justify-content: center; z-index: 1000;">
         <div style="width: 100%; max-width: 800px;">
-            <button id="updateBtn" class="primary-btn" onclick="updateShows()">Update</button>
+            <button id="updateBtn" class="primary-btn" onclick="updateAll()">Update</button>
         </div>
     </div>
 
@@ -488,7 +505,7 @@ USER_SHOWS_TEMPLATE = """
             document.getElementById(tabId).classList.add('active');
         }
 
-        function updateShows() {
+        function updateAll() {
             const btn = document.getElementById('updateBtn');
             btn.disabled = true;
             btn.innerHTML = 'Updating';
@@ -500,10 +517,19 @@ USER_SHOWS_TEMPLATE = """
             });
             newAllowed = [...new Set(newAllowed)];
             
-            fetch('/api/buyers/{{ userid }}/shows', {
+            const userName = document.getElementById('userNameInput').value;
+            const setCover = document.getElementById('cb_set_cover').checked;
+            const setArtist = document.getElementById('cb_set_artist').checked;
+
+            fetch('/api/buyers/{{ userid }}/update_all', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(newAllowed)
+                body: JSON.stringify({
+                    shows: newAllowed,
+                    name: userName,
+                    set_cover: setCover,
+                    set_artist: setArtist
+                })
             }).then(r => r.json()).then(res => {
                 btn.disabled = false;
                 if(res.success) {
@@ -750,8 +776,10 @@ def user_page(userid):
     user = users.get(userid, {})
     name = buyer.get("name") or user.get("name") or "Unknown"
     allowed_shows = buyer.get("allowed_shows", [])
+    set_cover = buyer.get("set_cover", False)
+    set_artist = buyer.get("set_artist", False)
     
-    return render_template_string(USER_SHOWS_TEMPLATE, userid=userid, name=name, allowed_shows=sorted(allowed_shows, key=lambda x: x.lower()), all_shows=sorted(list(shows.keys()), key=lambda x: x.lower()))
+    return render_template_string(USER_SHOWS_TEMPLATE, userid=userid, name=name, allowed_shows=sorted(allowed_shows, key=lambda x: x.lower()), all_shows=sorted(list(shows.keys()), key=lambda x: x.lower()), set_cover=set_cover, set_artist=set_artist)
 
 @flask_app.route('/show/<name>')
 def show_page(name):
@@ -846,6 +874,22 @@ def api_update_buyer_shows(userid):
         allowed[userid]["allowed_shows"] = allowed_shows
         save_allowed_users(allowed)
         return jsonify({"success": True, "shows": allowed_shows})
+    return jsonify({"success": False})
+
+@flask_app.route('/api/buyers/<userid>/update_all', methods=['POST'])
+def api_update_buyer_all(userid):
+    data = request.json
+    if not isinstance(data, dict):
+        return jsonify({"success": False})
+        
+    allowed = get_allowed_users()
+    if userid in allowed:
+        allowed[userid]["allowed_shows"] = data.get("shows", [])
+        allowed[userid]["name"] = data.get("name", "")
+        allowed[userid]["set_cover"] = data.get("set_cover", False)
+        allowed[userid]["set_artist"] = data.get("set_artist", False)
+        save_allowed_users(allowed)
+        return jsonify({"success": True, "shows": data.get("shows", [])})
     return jsonify({"success": False})
 
 @flask_app.route('/api/buyers/<userid>/toggle', methods=['POST'])
@@ -1310,9 +1354,23 @@ async def cmd_start(client: Client, message: Message):
         )
     else:
         name = message.from_user.first_name or "User"
-        await message.reply_text(
+        buyers = get_allowed_users()
+        uid_str = str(message.from_user.id)
+        buyer_data = buyers.get(uid_str, {})
+        
+        reply_msg = (
             f"Hey {name}\n\n"
-            "Click /shows_list to get all your shows list...",
+            "Use below command to access bot...\n\n"
+            "/shows_list Get show list"
+        )
+        
+        if buyer_data.get("set_cover"):
+            reply_msg += "\n/set_cover Set cover in episode"
+        if buyer_data.get("set_artist"):
+            reply_msg += "\n/set_artist Set artist in episode"
+            
+        await message.reply_text(
+            reply_msg,
             quote=False,
         )
 
@@ -1801,7 +1859,7 @@ async def cmd_stop(client: Client, message: Message):
     if download_flags.get(user_id):
         download_flags[user_id] = False
     else:
-        await message.reply_text("No active process to stop.")
+        await message.reply_text("No active process to stop...")
 
 async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
     try:
