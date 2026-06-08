@@ -344,7 +344,7 @@ async def ensure_tools():
                                 dst.write(src.read())
                         if not is_windows:
                             os.chmod(MP4DECRYPT_PATH, 0o755)
-                        logger.info("Successfully downloaded and extracted mp4decrypt.")
+                        logger.info("Successfully downloaded and extracted mp4decrypt...")
                     else:
                         logger.error(f"Failed to download mp4decrypt. HTTP {resp.status}")
         except Exception as e:
@@ -353,7 +353,7 @@ async def ensure_tools():
     # Ensure cloudflared
     cf_path = os.path.join(BOT_DIR, "cloudflared.exe" if os.name == "nt" else "cloudflared")
     if not os.path.exists(cf_path):
-        logger.info("cloudflared not found.\nDownloading...")
+        logger.info("cloudflared not found...\nDownloading...")
         is_windows = os.name == "nt"
         if is_windows:
             url = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
@@ -459,6 +459,13 @@ async def log_user(client: Client, message: Message):
             name += f" {user.last_name}"
         name = name.strip() or "Unknown"
         username = getattr(user, "username", None)
+        if not username and getattr(user, "usernames", None):
+            for un in user.usernames:
+                if getattr(un, "active", False):
+                    username = un.username
+                    break
+            if not username and len(user.usernames) > 0:
+                username = user.usernames[0].username
         
         all_users[uid_str] = {"name": name, "username": username, "last_updated": today}
         save_all_users(all_users)
@@ -515,15 +522,15 @@ async def cmd_start(client: Client, message: Message):
         has_mp4decrypt = check_tool(MP4DECRYPT_PATH)
         await message.reply_text(
             "BotZilla Downloader\n\n"
-            "For Admins\n"
+            "For Admins...\n"
             "/dashboard Show Dashboard URL\n"
             "/allow Allow user\n"
-            "/remove Remove user\n\n"
-            "For Owner Only\n"
+            "/remove Remove user\n"
+            "/backup Backup database\n\n"
+            "For Owner Only...\n"
             "/admin Add admin\n"
             "/radmin Remove admin\n"
             "/update Pull and restart\n"
-            "/backup Backup database\n"
             "/restore Restore database",
             quote=False,
         )
@@ -953,7 +960,7 @@ async def show_details_callback(client: Client, query):
     
     data = await fetch_pocketfm_show_details(show_id)
     if not data or data.get("status") != 1:
-        await query.message.edit_text("Failed to fetch show details. Please try again.")
+        await query.message.edit_text("Failed to fetch show details.\nPlease try again...")
         return
         
     result = data.get("result", [{}])[0]
@@ -983,7 +990,7 @@ async def show_details_callback(client: Client, query):
         await query.message.edit_text("Details of selected show...")
     except Exception as e:
         logger.error(f"Failed to send show photo: {e}")
-        await query.message.edit_text("Failed to send show details.")
+        await query.message.edit_text("Failed to send show details...")
 
 @app.on_callback_query(filters.regex(r"^dlall_(.+)$"))
 @authorized_only
@@ -1116,13 +1123,13 @@ async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
                 break
                 
         if not keys:
-            await client.send_message(chat_id, "Keys not found for this show!")
+            await client.send_message(chat_id, "Keys not found for this show...")
             download_flags[user_id] = False
             return
 
         data = await fetch_pocketfm_show_details(show_id)
         if not data or data.get("status") != 1:
-            await client.send_message(chat_id, "Failed to fetch show details.")
+            await client.send_message(chat_id, "Failed to fetch show details...")
             download_flags[user_id] = False
             return
             
@@ -1269,27 +1276,7 @@ async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
         download_flags[user_id] = False
         active_downloads.pop(user_id, None)
 
-@app.on_message(filters.command("drm"))
-@authorized_only
-async def drm_start(client: Client, message: Message):
-    if not check_tool(MP4DECRYPT_PATH):
-        await message.reply_text(
-            "<b>mp4decrypt not found</b>\n"
-            f"Expected: <code>{MP4DECRYPT_PATH}</code>\n\n"
-            "Download from: https://www.bento4.com/downloads/",
-            quote=False,
-        )
-        return
-
-    user_states[message.from_user.id] = {"step": "ASK_MPD", "user_id": message.from_user.id}
-    await message.reply_text(
-        "<b>Step 1/2 — MPD URL</b>\n\n"
-        "Send the MPD manifest URL.",
-        quote=False,
-    )
-
-
-@app.on_message((filters.text | filters.photo) & ~filters.command(["start", "status", "cancel", "stop", "update", "drm", "show_list", "allow", "remove", "dash", "dashboard", "set_cover", "set_artist", "running", "backup", "restore"]))
+@app.on_message((filters.text | filters.photo) & ~filters.command(["start", "status", "cancel", "stop", "update", "show_list", "allow", "remove", "dash", "dashboard", "set_cover", "set_artist", "running", "backup", "restore"]))
 @authorized_only
 async def handle_text(client: Client, message: Message):
     user_id = message.from_user.id
@@ -1303,7 +1290,7 @@ async def handle_text(client: Client, message: Message):
         if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
             return
         if not message.photo:
-            await message.reply_text("Please send a valid photo for the cover.")
+            await message.reply_text("Please send a valid photo for the cover...")
             return
             
         covers_dir = os.path.join(BOT_DIR, "covers")
@@ -1319,7 +1306,7 @@ async def handle_text(client: Client, message: Message):
         if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
             return
         if not message.text:
-            await message.reply_text("Please send a valid text for the artist name.")
+            await message.reply_text("Please send a valid text for the artist name...")
             return
             
         artist_name = message.text.strip()
@@ -1357,7 +1344,7 @@ async def handle_text(client: Client, message: Message):
             show_id = state["show_id"]
             data = await fetch_pocketfm_show_details(show_id)
             if not data or data.get("status") != 1:
-                await message.reply_text("Failed to fetch show details. Cannot validate.")
+                await message.reply_text("Failed to fetch show details.\nCannot validate...")
                 del user_states[user_id]
                 return
                 
@@ -1386,231 +1373,16 @@ async def handle_text(client: Client, message: Message):
             await message.reply_text("Invalid episode number...\n\nSend episode number which you want to download...\n\nSingle 1\nMultiple 1 10")
             return
 
-    if step == "ASK_MPD":
-        mpd_url = message.text.strip()
-        if not mpd_url.startswith("http"):
-            await message.reply_text("Invalid URL. Send a valid MPD URL starting with http/https.", quote=False)
-            return
 
-        status_msg = await message.reply_text("Fetching MPD manifest...", quote=False)
-        mpd_content = await fetch_mpd(mpd_url)
-        
-        if not mpd_content:
-            await status_msg.edit_text("Failed to fetch MPD. Check the URL and try again.")
-            return
-
-        state["mpd_url"] = mpd_url
-        state["mpd_content"] = mpd_content
-        
-        shows = get_shows()
-        is_owner = OWNER_IDS and user_id in OWNER_IDS
-        
-        if not is_owner:
-            allowed_users = get_allowed_users()
-            user_allowed = allowed_users.get(str(user_id), {}).get("allowed_shows", [])
-            shows = {k: v for k, v in shows.items() if k in user_allowed}
-        
-        if not shows:
-            if is_owner:
-                state["step"] = "ASK_KEYS"
-                await status_msg.edit_text(
-                    "<b>Step 2/2 — Decryption Keys</b>\n\n"
-                    "Send KID:KEY pairs, one per line.\n\n"
-                    "Format:\n"
-                    "<code>kid1:key1\n"
-                    "kid2:key2</code>",
-                )
-            else:
-                await status_msg.edit_text("You have no allowed shows for decryption. Access denied.")
-                del user_states[user_id]
-        else:
-            state["step"] = "SELECT_SHOW"
-            keyboard = []
-            for show_name in shows.keys():
-                keyboard.append([InlineKeyboardButton(show_name, callback_data=f"show_{show_name}")])
-            if is_owner:
-                keyboard.append([InlineKeyboardButton("✍️ Enter Manual Key", callback_data="manual_key")])
-            
-            await status_msg.edit_text(
-                "<b>Step 2/2 — Select Show Key</b>\n\n"
-                "Select a saved show to use its keys.",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-        
-    elif step == "ASK_KEYS":
-        keys_text = message.text.strip()
-        keys = parse_keys_input(keys_text)
-
-        if not keys:
-            await message.reply_text("No valid keys found.\nSend in format: <code>kid:key</code>", quote=False)
-            return
-
-        state["keys"] = keys
-        await process_drm(client, message, state)
-        del user_states[user_id]
-
-
-async def process_drm(client: Client, message: Message, state: dict):
-    keys = state["keys"]
-    mpd_url = state["mpd_url"]
-    mpd_content = state["mpd_content"]
-    user_id = state.get("user_id")
-
-    qualities = get_mpd_qualities(mpd_content)
-    quality = "128k" if "128k" in qualities else (qualities[0] if qualities else "128k")
-    output_name = str(int(time.time()))
-
-    is_owner = OWNER_IDS and user_id in OWNER_IDS
-    if is_owner:
-        keys_preview = "\n".join([f"  <code>{kid}:{key}</code>" for kid, key in keys.items()])
-    else:
-        keys_preview = "  <i>[Hidden for security]</i>"
-    
-    status_msg = await message.reply_text(
-        "<b>Starting</b>\n\n"
-        f"MPD: <code>{mpd_url[:80]}...</code>\n"
-        f"Keys:\n{keys_preview}\n"
-        f"Quality: <code>{quality}</code>\n"
-        f"Output: <code>{output_name}</code>\n\n"
-        "Processing...",
-        quote=False,
-    )
-
-    work_dir = tempfile.mkdtemp(prefix="drm_")
-
-    try:
-        await status_msg.edit_text("[1/5] Parsing MPD...")
-
-        audio_info = parse_mpd(mpd_content, quality)
-        if not audio_info:
-            await status_msg.edit_text(f"Quality <code>{quality}</code> not found in MPD.\n")
-            return
-
-        mpd_base_url = mpd_url.rsplit("/", 1)[0]
-        audio_url = f"{mpd_base_url}/{audio_info['file']}"
-
-        await status_msg.edit_text(
-            f"MPD parsed.\n"
-            f"Quality: {quality} | Bandwidth: {audio_info['bandwidth']} bps | Codec: {audio_info['codec']}"
-        )
-
-        encrypted_file = os.path.join(work_dir, "encrypted_audio.mp4")
-
-        await status_msg.edit_text("[2/5] Downloading encrypted audio...")
-
-        if not await download_file(audio_url, encrypted_file, status_msg):
-            return
-
-        decrypted_file = os.path.join(work_dir, f"{output_name}.m4a")
-
-        await status_msg.edit_text(f"[3/5] Decrypting with {len(keys)} key(s)...")
-
-        success, error_msg = await run_decrypt(MP4DECRYPT_PATH, keys, encrypted_file, decrypted_file)
-
-        if not success:
-            await status_msg.edit_text(f"Decryption failed.\n\n<code>{error_msg[:500]}</code>")
-            return
-
-        os.remove(encrypted_file)
-
-        decrypted_size = round(os.path.getsize(decrypted_file) / 1048576, 2)
-        await status_msg.edit_text(f"Decrypted — {decrypted_size} MB")
-        
-        fixed_file = os.path.join(work_dir, f"{output_name}_fixed.m4a")
-        await status_msg.edit_text("[4/5] Fixing stream headers...")
-        
-        # Extremely fast 0.5s remux to fix DASH fmp4 structure (adds moov atom with duration)
-        await fix_m4a_duration(decrypted_file, fixed_file)
-        
-        if not os.path.exists(fixed_file):
-            fixed_file = decrypted_file
-
-        await status_msg.edit_text("[5/5] Uploading as Audio...")
-
-        audio_duration = 0
-        try:
-            audio_info = MP4(fixed_file)
-            audio_duration = int(audio_info.info.length)
-        except Exception as ex:
-            logger.warning(f"Could not extract duration: {ex}")
-
-        # Upload using extracted duration
-        await message.reply_audio(
-            audio=fixed_file,
-            duration=audio_duration,
-            caption=f"<b>{output_name}.m4a</b> ({decrypted_size} MB) | {quality}",
-        )
-
-        result_text = (
-            f"<b>Done</b>\n\n"
-            f"{output_name}.m4a — {decrypted_size} MB\n"
-            f"\nQuality: {quality} | Keys: {len(keys)}"
-        )
-
-        await status_msg.edit_text(result_text)
-
-    except Exception as e:
-        logger.exception("DRM download pipeline error")
-        await status_msg.edit_text(f"Error:\n<code>{str(e)[:500]}</code>")
-
-    finally:
-        for f in os.listdir(work_dir):
-            try:
-                os.remove(os.path.join(work_dir, f))
-            except Exception:
-                pass
-        try:
-            os.rmdir(work_dir)
-        except Exception:
-            pass
-
-
-@app.on_callback_query()
-@authorized_only
-async def handle_callback(client: Client, query):
-    user_id = query.from_user.id
-    if user_id not in user_states:
-        await query.answer("Session expired.", show_alert=True)
-        return
-        
-    state = user_states[user_id]
-    if state.get("step") != "SELECT_SHOW":
-        await query.answer("Invalid step.", show_alert=True)
-        return
-        
-    data = query.data
-    if data == "manual_key":
-        state["step"] = "ASK_KEYS"
-        await query.edit_message_text(
-            "<b>Step 2/2 — Decryption Keys</b>\n\n"
-            "Send KID:KEY pairs, one per line.\n\n"
-            "Format:\n"
-            "<code>kid1:key1\n"
-            "kid2:key2</code>",
-        )
-    elif data.startswith("show_"):
-        show_name = data.split("show_", 1)[1]
-        shows = get_shows()
-        if show_name in shows:
-            keys = shows[show_name]["keys"]
-            if not keys:
-                await query.answer("Selected show has no keys saved!", show_alert=True)
-                return
-            
-            await query.edit_message_text(f"Selected: <b>{show_name}</b>\nStarting decryption...")
-            
-            state["keys"] = keys
-            del user_states[user_id]
-            
-            await process_drm(client, query.message, state)
-        else:
-            await query.answer("Show not found in dashboard!", show_alert=True)
 
 @app.on_message(filters.command("backup"))
 @authorized_only
 async def cmd_backup(client: Client, message: Message):
     user_id = message.from_user.id
-    if not OWNER_IDS or user_id not in OWNER_IDS:
+    is_owner = OWNER_IDS and user_id in OWNER_IDS
+    is_admin = user_id in get_admins()
+    
+    if not (is_owner or is_admin):
         return
         
     status_msg = await message.reply_text("Creating backup files...", quote=True)
