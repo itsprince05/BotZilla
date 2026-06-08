@@ -835,7 +835,10 @@ def get_show_list_keyboard(shows_list, shows, page=1):
     keyboard = []
     for show in current_shows:
         show_id = shows.get(show, {}).get("id", "0")
-        keyboard.append([InlineKeyboardButton(show, callback_data=f"showdt_{show_id}")])
+        cb_data = f"showdt_{show_id}"
+        if len(cb_data) > 64:
+            cb_data = cb_data[:64]
+        keyboard.append([InlineKeyboardButton(show, callback_data=cb_data)])
         
     if total_pages > 1:
         nav_row = []
