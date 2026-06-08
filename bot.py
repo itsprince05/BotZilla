@@ -417,7 +417,12 @@ USER_SHOWS_TEMPLATE = """
         .primary-btn { width: 100%; padding: 12px; background: #2481cc; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
         .primary-btn:disabled { opacity: 0.7; cursor: not-allowed; }
         .btn-group { display: flex; gap: 10px; }
-        .checkbox { width: 20px; height: 20px; cursor: pointer; }
+        .checkbox { display: none; }
+        .custom-checkbox { width: 24px; height: 24px; cursor: pointer; color: #2481cc; flex-shrink: 0; }
+        .custom-checkbox .checked-icon { display: none; }
+        .custom-checkbox .unchecked-icon { display: block; }
+        input[type="checkbox"]:checked ~ .custom-checkbox .checked-icon { display: block; }
+        input[type="checkbox"]:checked ~ .custom-checkbox .unchecked-icon { display: none; }
     </style>
 </head>
 <body>
@@ -446,7 +451,13 @@ USER_SHOWS_TEMPLATE = """
                             <div class="list-title">{{ show }}</div>
                         </div>
                         <div class="btn-group" onclick="event.stopPropagation()">
-                            <input type="checkbox" id="cb_allowed_{{ loop.index }}" class="checkbox show-checkbox" value="{{ show }}" checked onclick="event.stopPropagation()" onchange="syncCb(this.value, this.checked)">
+                            <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
+                                <input type="checkbox" id="cb_allowed_{{ loop.index }}" class="checkbox show-checkbox" value="{{ show }}" checked onchange="syncCb(this.value, this.checked)">
+                                <div class="custom-checkbox">
+                                    <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+                                    <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
+                                </div>
+                            </label>
                         </div>
                     </div>
                     {% endfor %}
@@ -461,7 +472,13 @@ USER_SHOWS_TEMPLATE = """
                         <div class="list-title">{{ show }}</div>
                     </div>
                     <div class="btn-group" onclick="event.stopPropagation()">
-                        <input type="checkbox" id="cb_total_{{ loop.index }}" class="checkbox show-checkbox" value="{{ show }}" {% if show in allowed_shows %}checked{% endif %} onclick="event.stopPropagation()" onchange="syncCb(this.value, this.checked)">
+                        <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
+                            <input type="checkbox" id="cb_total_{{ loop.index }}" class="checkbox show-checkbox" value="{{ show }}" {% if show in allowed_shows %}checked{% endif %} onchange="syncCb(this.value, this.checked)">
+                            <div class="custom-checkbox">
+                                <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+                                <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
+                            </div>
+                        </label>
                     </div>
                 </div>
                 {% endfor %}
@@ -473,12 +490,24 @@ USER_SHOWS_TEMPLATE = """
                 <input type="text" id="userNameInput" value="{{ name }}" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0; box-sizing: border-box; margin-bottom: 20px; font-family: inherit; font-size: 15px;">
                 
                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-                    <input type="checkbox" id="cb_set_cover" class="checkbox" {% if set_cover %}checked{% endif %}>
+                    <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
+                        <input type="checkbox" id="cb_set_cover" class="checkbox" {% if set_cover %}checked{% endif %}>
+                        <div class="custom-checkbox">
+                            <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+                            <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
+                        </div>
+                    </label>
                     <label for="cb_set_cover" style="font-size: 15px; font-weight: 500; cursor: pointer;">Set audio cover in episode</label>
                 </div>
                 
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <input type="checkbox" id="cb_set_artist" class="checkbox" {% if set_artist %}checked{% endif %}>
+                    <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
+                        <input type="checkbox" id="cb_set_artist" class="checkbox" {% if set_artist %}checked{% endif %}>
+                        <div class="custom-checkbox">
+                            <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+                            <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
+                        </div>
+                    </label>
                     <label for="cb_set_artist" style="font-size: 15px; font-weight: 500; cursor: pointer;">Set artist name in episode</label>
                 </div>
             </div>
@@ -547,7 +576,13 @@ USER_SHOWS_TEMPLATE = """
                                     <div class="list-title">${show}</div>
                                 </div>
                                 <div class="btn-group" onclick="event.stopPropagation()">
-                                    <input type="checkbox" id="cb_allowed_dyn_${index}" class="checkbox show-checkbox" value="${show}" checked onclick="event.stopPropagation()" onchange="syncCb(this.value, this.checked)">
+                                    <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
+                                        <input type="checkbox" id="cb_allowed_dyn_${index}" class="checkbox show-checkbox" value="${show}" checked onchange="syncCb(this.value, this.checked)">
+                                        <div class="custom-checkbox">
+                                            <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+                                            <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
+                                        </div>
+                                    </label>
                                 </div>
                             </div>
                         `).join('');
@@ -593,7 +628,12 @@ SHOW_USERS_TEMPLATE = """
         .primary-btn { width: 100%; padding: 12px; background: #2481cc; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
         .primary-btn:disabled { opacity: 0.7; cursor: not-allowed; }
         .btn-group { display: flex; gap: 10px; }
-        .checkbox { width: 20px; height: 20px; cursor: pointer; }
+        .checkbox { display: none; }
+        .custom-checkbox { width: 24px; height: 24px; cursor: pointer; color: #2481cc; flex-shrink: 0; }
+        .custom-checkbox .checked-icon { display: none; }
+        .custom-checkbox .unchecked-icon { display: block; }
+        input[type="checkbox"]:checked ~ .custom-checkbox .checked-icon { display: block; }
+        input[type="checkbox"]:checked ~ .custom-checkbox .unchecked-icon { display: none; }
     </style>
 </head>
 <body>
@@ -613,7 +653,13 @@ SHOW_USERS_TEMPLATE = """
                     <div class="list-subtitle">{{ buyer_id }}{% if buyer_data.username %} @{{ buyer_data.username }}{% endif %}</div>
                 </div>
                 <div class="btn-group" onclick="event.stopPropagation()">
-                    <input type="checkbox" id="cb_{{ buyer_id }}" class="checkbox user-checkbox" value="{{ buyer_id }}" {% if show_name in buyer_data.allowed_shows|default([]) %}checked{% endif %} onclick="event.stopPropagation()" onchange="syncCb(this.value, this.checked)">
+                    <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
+                        <input type="checkbox" id="cb_{{ buyer_id }}" class="checkbox user-checkbox" value="{{ buyer_id }}" {% if show_name in buyer_data.allowed_shows|default([]) %}checked{% endif %} onchange="syncCb(this.value, this.checked)">
+                        <div class="custom-checkbox">
+                            <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+                            <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
+                        </div>
+                    </label>
                 </div>
             </div>
             {% endfor %}
@@ -890,8 +936,25 @@ def api_update_buyer_all(userid):
         name = data.get("name", "")
         allowed[userid]["name"] = name.title() if name else ""
         
-        allowed[userid]["set_cover"] = data.get("set_cover", False)
-        allowed[userid]["set_artist"] = data.get("set_artist", False)
+        set_cover = data.get("set_cover", False)
+        set_artist = data.get("set_artist", False)
+        
+        allowed[userid]["set_cover"] = set_cover
+        allowed[userid]["set_artist"] = set_artist
+        
+        if not set_artist and "artist_name" in allowed[userid]:
+            del allowed[userid]["artist_name"]
+            
+        if not set_cover:
+            if "has_cover" in allowed[userid]:
+                del allowed[userid]["has_cover"]
+            cover_path = os.path.join(BOT_DIR, "covers", f"{userid}.jpg")
+            if os.path.exists(cover_path):
+                try:
+                    os.remove(cover_path)
+                except:
+                    pass
+        
         save_allowed_users(allowed)
         return jsonify({"success": True, "shows": data.get("shows", [])})
     return jsonify({"success": False})
@@ -1365,7 +1428,7 @@ async def cmd_start(client: Client, message: Message):
         reply_msg = (
             f"Hey {name}\n\n"
             "Use below command to access bot...\n\n"
-            "/shows_list Get show list"
+            "/show_list Get show list"
         )
         
         if buyer_data.get("set_cover"):
@@ -1672,7 +1735,7 @@ def get_show_list_keyboard(shows_list, shows, page=1):
         
     return InlineKeyboardMarkup(keyboard)
 
-@app.on_message(filters.command("shows_list"))
+@app.on_message(filters.command("show_list"))
 @authorized_only
 async def cmd_shows_list(client: Client, message: Message):
     user_id = message.from_user.id
@@ -2060,7 +2123,7 @@ async def drm_start(client: Client, message: Message):
     )
 
 
-@app.on_message((filters.text | filters.photo) & ~filters.command(["start", "status", "cancel", "stop", "update", "drm", "shows_list", "allow", "remove", "dash", "dashboard", "set_cover", "set_artist"]))
+@app.on_message((filters.text | filters.photo) & ~filters.command(["start", "status", "cancel", "stop", "update", "drm", "show_list", "allow", "remove", "dash", "dashboard", "set_cover", "set_artist"]))
 @authorized_only
 async def handle_text(client: Client, message: Message):
     user_id = message.from_user.id
