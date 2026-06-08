@@ -100,7 +100,7 @@ HTML_TEMPLATE = """
         .primary-btn { width: 100%; padding: 12px; background: #2481cc; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
         .primary-btn:hover { background: #1e6eb0; }
         .item-list { display: flex; flex-direction: column; gap: 0; background: #ffffff; border-radius: 10px; overflow: hidden; border: 1px solid #e0e0e0; }
-        .list-card { background: transparent; border-radius: 0; padding: 12px 15px; border: none; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
+        .list-card { background: transparent; border-radius: 0; padding: 10px; border: none; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
         .list-card:last-child { border-bottom: none; }
         .list-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
         .list-subtitle { font-size: 13px; color: #666; margin-top: 5px; }
@@ -413,7 +413,7 @@ USER_SHOWS_TEMPLATE = """
         .card { background: #ffffff; border-radius: 10px; padding: 15px; border: 1px solid #e0e0e0; box-sizing: border-box; }
         .card h3 { margin-top: 0; font-size: 16px; color: #1c1e21; margin-bottom: 5px; }
         .item-list { display: flex; flex-direction: column; gap: 0; background: #ffffff; border-radius: 10px; overflow: hidden; border: 1px solid #e0e0e0; }
-        .list-card { background: transparent; border-radius: 0; padding: 12px 15px; border: none; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
+        .list-card { background: transparent; border-radius: 0; padding: 10px; border: none; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
         .list-card:last-child { border-bottom: none; }
         .list-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
         .primary-btn { width: 100%; padding: 12px; background: #2481cc; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
@@ -422,7 +422,7 @@ USER_SHOWS_TEMPLATE = """
         .checkbox { display: none; }
         .custom-checkbox { width: 24px; height: 24px; cursor: pointer; color: #2481cc; flex-shrink: 0; }
         .custom-checkbox .checked-icon { display: none; }
-        .custom-checkbox .unchecked-icon { display: block; }
+        .custom-checkbox .unchecked-icon { display: block; color: #999; }
         input[type="checkbox"]:checked ~ .custom-checkbox .checked-icon { display: block; }
         input[type="checkbox"]:checked ~ .custom-checkbox .unchecked-icon { display: none; }
     </style>
@@ -624,7 +624,7 @@ SHOW_USERS_TEMPLATE = """
         .navbar-title { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
         .container { max-width: 800px; margin: 0 auto; padding: 15px; padding-bottom: 80px; }
         .item-list { display: flex; flex-direction: column; gap: 0; background: #ffffff; border-radius: 10px; overflow: hidden; border: 1px solid #e0e0e0; }
-        .list-card { background: transparent; border-radius: 0; padding: 12px 15px; border: none; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
+        .list-card { background: transparent; border-radius: 0; padding: 10px; border: none; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
         .list-card:last-child { border-bottom: none; }
         .list-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
         .list-subtitle { font-size: 13px; color: #666; margin-top: 5px; }
@@ -634,7 +634,7 @@ SHOW_USERS_TEMPLATE = """
         .checkbox { display: none; }
         .custom-checkbox { width: 24px; height: 24px; cursor: pointer; color: #2481cc; flex-shrink: 0; }
         .custom-checkbox .checked-icon { display: none; }
-        .custom-checkbox .unchecked-icon { display: block; }
+        .custom-checkbox .unchecked-icon { display: block; color: #999; }
         input[type="checkbox"]:checked ~ .custom-checkbox .checked-icon { display: block; }
         input[type="checkbox"]:checked ~ .custom-checkbox .unchecked-icon { display: none; }
     </style>
