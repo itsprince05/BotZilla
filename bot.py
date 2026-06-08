@@ -54,940 +54,31 @@ dashboard_port = 5000
 # {user_id: {"mpd_url": str, "mpd_content": str}}
 user_states = {}
 download_flags = {}
+user_queues = {}
+global_download_semaphore = None
 
-from flask import Flask, request, jsonify, render_template_string, send_file
-import threading
-
-flask_app = Flask(__name__)
-import logging
-log = logging.getLogger('werkzeug')
-log.setLevel(logging.ERROR)
-
-SHOWS_FILE = os.path.join(BOT_DIR, "shows.json")
-ALLOWED_USERS_FILE = os.path.join(BOT_DIR, "allowed_users.json")
-ALL_USERS_FILE = os.path.join(BOT_DIR, "all_users.json")
-AVATARS_DIR = os.path.join(BOT_DIR, "avatars")
-ADMINS_FILE = os.path.join(BOT_DIR, "admins.json")
-POCKETFM_AUTH_FILE = os.path.join(BOT_DIR, "pocketfm_auth.json")
-os.makedirs(AVATARS_DIR, exist_ok=True)
-
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BotZilla Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Outfit', sans-serif; background-color: #f0f2f5; margin: 0; padding: 0; color: #1c1e21; -webkit-user-select: none; user-select: none; }
-        .action-bar { position: sticky; top: 0; z-index: 100; box-sizing: border-box; height: 48px; background: #2481cc; color: white; padding: 0 10px; gap: 10px; display: flex; align-items: center; }
-        .navbar-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: white; color: #2481cc; }
-        .navbar-title { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
-        .tabs-container { display: flex; background: #fff; border-bottom: 1px solid #e0e0e0; }
-        .tab { flex: 1; text-align: center; padding: 12px 0; font-weight: 600; color: #666; cursor: pointer; border-bottom: 2px solid transparent; transition: 0.2s; }
-        .tab:hover { background: #f8f9fa; }
-        .tab.active { color: #2481cc; background: #eef5fb; border-bottom: 2px solid #2481cc; }
-        .container { max-width: 800px; margin: 0 auto; padding: 15px; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .card { background: #ffffff; border-radius: 10px; padding: 10px; border: 1px solid #e0e0e0; margin-bottom: 15px; display: flex; flex-direction: column; gap: 10px; }
-        .card h3 { margin-top: 0; font-size: 16px; color: #1c1e21; margin-bottom: 5px; }
-        input, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; box-sizing: border-box; font-family: inherit; font-size: 14px; outline: none; }
-        input:focus, textarea:focus { border-color: #2481cc; }
-        textarea::-webkit-scrollbar { display: none; }
-        textarea { -ms-overflow-style: none; scrollbar-width: none; }
-        .primary-btn { width: 100%; padding: 12px; background: #2481cc; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
-        .primary-btn:hover { background: #1e6eb0; }
-        .item-list { display: flex; flex-direction: column; gap: 0; background: #ffffff; border-radius: 10px; overflow: hidden; border: 1px solid #e0e0e0; }
-        .list-card { background: transparent; border-radius: 0; padding: 10px; border: none; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
-        .list-card:last-child { border-bottom: none; }
-        .list-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
-        .list-subtitle { font-size: 13px; color: #666; margin-top: 5px; }
-        .btn-group { display: flex; gap: 10px; }
-        .icon-btn { display: flex; justify-content: center; align-items: center; cursor: pointer; width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; }
-        .delete-btn { background: #fff5f5; color: #fa5252; }
-        .action-btn { background: #fff5f5; color: #fa5252; }
-        .action-btn.paused { background: #e6ffe6; color: #2b8a3e; }
-        
-        #delete-popup { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; }
-        .popup-box { background:#fff; padding:20px; border-radius:12px; width:calc(100% - 40px); max-width:320px; box-sizing:border-box; }
-        .popup-box h3 { margin-top:0; color:#1c1e21; }
-        .popup-box p { font-size:14px; color:#666; margin-bottom:15px; }
-        .popup-btns { display:flex; gap:10px; }
-        .popup-btns button { flex:1; padding:12px 15px; border:none; border-radius:10px; cursor:pointer; font-family:inherit; font-weight:600; font-size:15px; }
-        .cancel-btn { background:#f0f2f5; color:#333; }
-        .confirm-btn { background:#fa5252; color:#fff; }
-        .checkbox { width: 20px; height: 20px; }
-        .user-shows-tab-content { display: none; }
-        .user-shows-tab-content.active { display: block; }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        .lucide-loader { animation: spin 1s linear infinite; }
-        #global-loader { position: fixed; top: 0; left: 0; width: 100%; height: 100vh; background: #f0f2f5; display: flex; align-items: center; justify-content: center; z-index: 99999; }
-    </style>
-</head>
-<body>
-    <div id="global-loader">
-        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2481cc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-loader-icon lucide-loader"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg>
-    </div>
-    <div id="main-page">
-        <div class="action-bar">
-            <div class="navbar-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 9-5-9-5-9 5 9 5z"/><path d="m12 14-9-5 9-5 9 5-9 5z"/><path d="m12 14 9-5-9-5-9 5 9 5z"/><path d="m12 21 9-5-9-5-9 5 9 5z"/><path d="m12 21-9-5 9-5 9 5-9 5z"/></svg>
-        </div>
-        <div class="navbar-title">BotZilla Dashboard</div>
-    </div>
-    
-    <div class="tabs-container">
-        <div class="tab active" onclick="switchTab('shows', event)">Shows</div>
-        <div class="tab" onclick="switchTab('buyers', event)">Buyers</div>
-        <div class="tab" onclick="switchTab('users', event)">Users</div>
-    </div>
-    
-    <div class="container">
-        <!-- SHOWS TAB -->
-        <div id="shows" class="tab-content active">
-            <div class="card">
-                <h3>Add New Show</h3>
-                <form id="addShowForm" style="display: flex; flex-direction: column; gap: 10px;">
-                    <textarea id="showName" rows="1" required placeholder="Show Name" style="resize: none; overflow-y: auto; max-height: 90px; box-sizing: border-box;" oninput="this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 90) + 'px'"></textarea>
-                    <input type="text" id="showId" placeholder="Show ID" required>
-                    <textarea id="decryptionKey" rows="4" required placeholder="Decryption Keys" style="resize: none;"></textarea>
-                    <button type="submit" class="primary-btn">Save Show</button>
-                </form>
-            </div>
-            <div class="item-list" id="showsTable"></div>
-        </div>
-        
-        <!-- BUYERS TAB -->
-        <div id="buyers" class="tab-content">
-            <div class="item-list" id="buyersTable"></div>
-        </div>
-        
-        <!-- USERS TAB -->
-        <div id="users" class="tab-content">
-            <div class="item-list" id="usersTable"></div>
-        </div>
-    </div>
-    </div>
-
-
-
-    <!-- DELETE POPUP -->
-    <div id="delete-popup">
-        <div class="popup-box">
-            <h3>Confirm Delete</h3>
-            <p>Are you sure you want to delete this show?</p>
-            <div class="popup-btns">
-                <button class="cancel-btn" onclick="hideDeletePopup()">Cancel</button>
-                <button id="delete-btn-submit" class="confirm-btn" onclick="confirmDelete()">Delete</button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        let initialLoadsCompleted = 0;
-        function checkGlobalLoad() {
-            initialLoadsCompleted++;
-            if(initialLoadsCompleted >= 3) {
-                const loader = document.getElementById('global-loader');
-                if(loader) loader.style.display = 'none';
-            }
-        }
-
-
-
-        function switchTab(tabId, event) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            event.currentTarget.classList.add('active');
-            document.getElementById(tabId).classList.add('active');
+async def process_user_queue(user_id):
+    while True:
+        task = await user_queues[user_id].get()
+        if task is None:
+            break
             
-            if (tabId === 'shows') loadShows();
-            else if (tabId === 'buyers') loadBuyers();
-            else if (tabId === 'users') loadUsers();
-        }
-
-        function loadShows() {
-            fetch('/api/shows').then(r => r.json()).then(shows => {
-                const container = document.getElementById('showsTable');
-                container.innerHTML = '';
-                Object.entries(shows).sort((a, b) => a[0].toLowerCase().localeCompare(b[0].toLowerCase())).forEach(([name, data]) => {
-                    const count = data.allowed_count || 0;
-                    container.innerHTML += `
-                        <div class="list-card" style="cursor: pointer;" onclick="window.location.href='/show/${encodeURIComponent(name)}'">
-                            <div style="flex: 1; overflow: hidden;">
-                                <div class="list-title">${name}</div>
-                                <div style="font-size: 13px; color: #666; margin-top: 4px;">${count} allowed users</div>
-                            </div>
-                            <div class="btn-group">
-                                <div class="icon-btn delete-btn" onclick="event.stopPropagation(); showDeletePopup('${name}')">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                });
-            }).finally(() => { if (initialLoadsCompleted < 3) checkGlobalLoad(); });
-        }
-
-        function loadBuyers() {
-            Promise.all([fetch('/api/buyers').then(r => r.json()), fetch('/api/users').then(r => r.json())])
-            .then(([buyers, users]) => {
-                const container = document.getElementById('buyersTable');
-                container.innerHTML = '';
-                Object.entries(buyers).sort((a, b) => {
-                    const aName = (a[1].name || (users[a[0]] || {}).name || 'Unknown').toLowerCase();
-                    const bName = (b[1].name || (users[b[0]] || {}).name || 'Unknown').toLowerCase();
-                    return aName.localeCompare(bName);
-                }).forEach(([uid, data]) => {
-                    const isPaused = data.status === 'paused';
-                    const icon = isPaused ? 
-                        `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-play-icon lucide-play"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg>` : 
-                        `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pause-icon lucide-pause"><rect x="14" y="3" width="5" height="18" rx="1"/><rect x="5" y="3" width="5" height="18" rx="1"/></svg>`;
-                    
-                    const userData = users[uid] || {};
-                    const name = data.name || userData.name || 'Unknown';
-                    const username = userData.username ? ` @${userData.username}` : '';
-                    const initial = name.charAt(0).toUpperCase() || '?';
-                    const bgStyle = isPaused ? 'background-color: #ffe6e6;' : '';
-                    const allowedCount = (data.allowed_shows || []).length;
-                    
-                    container.innerHTML += `
-                        <div class="list-card" style="${bgStyle}; cursor: pointer;" onclick="window.location.href='/user/${uid}'">
-                            <div style="display: flex; align-items: center; gap: 15px; flex: 1; overflow: hidden;">
-                                <img src="/api/avatars/${uid}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-                                <div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: #2481cc; color: white; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0;">
-                                    ${initial}
-                                </div>
-                                <div style="flex: 1; overflow: hidden;">
-                                    <div class="list-title">${name}</div>
-                                    <div class="list-subtitle">${uid}${username}</div>
-                                    <div class="list-subtitle" style="margin-top:2px;">${allowedCount} allowed shows</div>
-                                </div>
-                            </div>
-                            <div class="btn-group" onclick="event.stopPropagation()">
-                                <div id="toggle-btn-${uid}" class="icon-btn action-btn ${isPaused ? 'paused' : ''}" onclick="toggleBuyer('${uid}')" title="Toggle Access">
-                                    ${icon}
-                                </div>
-                            </div>
-                            </div>
-                        </div>
-                    `;
-                });
-            }).finally(() => { if (initialLoadsCompleted < 3) checkGlobalLoad(); });
-        }
-
-        function loadUsers() {
-            Promise.all([fetch('/api/buyers').then(r => r.json()), fetch('/api/users').then(r => r.json())])
-            .then(([buyers, users]) => {
-                const container = document.getElementById('usersTable');
-                container.innerHTML = '';
-                Object.entries(users).reverse().forEach(([uid, userData]) => {
-                    const name = userData.name || 'Unknown';
-                    const username = userData.username ? ` @${userData.username}` : '';
-                    const initial = name.charAt(0).toUpperCase() || '?';
-                    
-                    const isBuyer = buyers.hasOwnProperty(uid);
-                    const bgStyle = isBuyer ? 'background-color: #e6ffe6;' : '';
-                    
-                    container.innerHTML += `
-                        <div class="list-card" style="${bgStyle}">
-                            <div style="display: flex; align-items: center; gap: 15px; flex: 1; overflow: hidden;">
-                                <img src="/api/avatars/${uid}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-                                <div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: #2481cc; color: white; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; flex-shrink: 0;">
-                                    ${initial}
-                                </div>
-                                <div style="flex: 1; overflow: hidden;">
-                                    <div class="list-title">${name}</div>
-                                    <div class="list-subtitle">${uid}${username}</div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                });
-            }).finally(() => { if (initialLoadsCompleted < 3) checkGlobalLoad(); });
-        }
-
-        function toggleBuyer(uid) {
-            const btn = document.getElementById('toggle-btn-' + uid);
-            if (btn) {
-                btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-loader-icon lucide-loader"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg>`;
-            }
-            fetch('/api/buyers/' + uid + '/toggle', { method: 'POST' }).then(() => loadBuyers());
-        }
-
-        document.getElementById('addShowForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const btn = e.target.querySelector('button');
-            const name = document.getElementById('showName').value;
-            const id = document.getElementById('showId').value;
-            const keysText = document.getElementById('decryptionKey').value;
-            
-            btn.disabled = true;
-            btn.textContent = "Saving...";
-            
-            fetch('/api/shows', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ name, id, keys_text: keysText })
-            }).then(r => r.json()).then(res => {
-                btn.disabled = false;
-                btn.textContent = "Save Show";
-                if(res.success) {
-                    document.getElementById('addShowForm').reset();
-                    loadShows();
-                } else alert('Error adding show');
-            });
-        });
-
-        let itemToDelete = null;
-        let deleteTimer = null;
-        
-        function showDeletePopup(name) {
-            itemToDelete = name;
-            document.getElementById('delete-popup').style.display = 'flex';
-            const btn = document.getElementById('delete-btn-submit');
-            btn.disabled = true;
-            btn.style.opacity = '0.5';
-            btn.style.cursor = 'not-allowed';
-            let count = 5;
-            btn.textContent = `Delete (${count})`;
-            if (deleteTimer) clearInterval(deleteTimer);
-            deleteTimer = setInterval(() => {
-                count--;
-                if (count > 0) {
-                    btn.textContent = `Delete (${count})`;
-                } else {
-                    clearInterval(deleteTimer);
-                    btn.textContent = 'Delete';
-                    btn.disabled = false;
-                    btn.style.opacity = '1';
-                    btn.style.cursor = 'pointer';
-                }
-            }, 1000);
-        }
-
-        function hideDeletePopup() {
-            document.getElementById('delete-popup').style.display = 'none';
-            itemToDelete = null;
-            if (deleteTimer) clearInterval(deleteTimer);
-        }
-
-        function confirmDelete() {
-            if(!itemToDelete) return;
-            fetch('/api/shows/' + encodeURIComponent(itemToDelete), { method: 'DELETE' })
-                .then(() => {
-                    hideDeletePopup();
-                    loadShows();
-                });
-        }
-
-        loadShows();
-        loadBuyers();
-        loadUsers();
-    </script>
-</body>
-</html>
-"""
-
-USER_SHOWS_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BotZilla Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Outfit', sans-serif; background-color: #f0f2f5; margin: 0; padding: 0; color: #1c1e21; -webkit-user-select: none; user-select: none; }
-        .action-bar { position: sticky; top: 0; z-index: 100; box-sizing: border-box; height: 48px; background: #2481cc; color: white; padding: 0 10px; gap: 10px; display: flex; align-items: center; }
-        .navbar-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: white; cursor: pointer; }
-        .navbar-title { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
-        .tabs-container { display: flex; background: #fff; border-bottom: 1px solid #e0e0e0; }
-        .tab { flex: 1; text-align: center; padding: 12px 0; font-weight: 600; color: #666; cursor: pointer; border-bottom: 2px solid transparent; transition: 0.2s; }
-        .tab.active { color: #2481cc; background: #eef5fb; border-bottom: 2px solid #2481cc; }
-        .container { max-width: 800px; margin: 0 auto; padding: 15px; padding-bottom: 80px; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .card { background: #ffffff; border-radius: 10px; padding: 15px; border: 1px solid #e0e0e0; box-sizing: border-box; }
-        .card h3 { margin-top: 0; font-size: 16px; color: #1c1e21; margin-bottom: 5px; }
-        .item-list { display: flex; flex-direction: column; gap: 0; background: #ffffff; border-radius: 10px; overflow: hidden; border: 1px solid #e0e0e0; }
-        .list-card { background: transparent; border-radius: 0; padding: 10px; border: none; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
-        .list-card:last-child { border-bottom: none; }
-        .list-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
-        .primary-btn { width: 100%; padding: 12px; background: #2481cc; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
-        .primary-btn:disabled { opacity: 0.7; cursor: not-allowed; }
-        .btn-group { display: flex; gap: 10px; }
-        .checkbox { display: none; }
-        .custom-checkbox { width: 24px; height: 24px; cursor: pointer; color: #2481cc; flex-shrink: 0; }
-        .custom-checkbox .checked-icon { display: none; }
-        .custom-checkbox .unchecked-icon { display: block; color: #999; }
-        input[type="checkbox"]:checked ~ .custom-checkbox .checked-icon { display: block; }
-        input[type="checkbox"]:checked ~ .custom-checkbox .unchecked-icon { display: none; }
-    </style>
-</head>
-<body>
-    <div class="action-bar">
-        <div class="navbar-icon" onclick="window.location.href='/'">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-left-icon lucide-arrow-left"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
-        </div>
-        <div class="navbar-title">BotZilla Dashboard</div>
-    </div>
-    
-    <div class="tabs-container">
-        <div class="tab active" onclick="switchTab('allowed-shows-tab', event)">Allowed</div>
-        <div class="tab" onclick="switchTab('total-shows-tab', event)">Total</div>
-        <div class="tab" onclick="switchTab('settings-tab', event)">Setting</div>
-    </div>
-    
-    <div class="container">
-        <div id="allowed-shows-tab" class="tab-content active">
-            <div class="item-list">
-                {% if allowed_shows|length == 0 %}
-                    <div style="padding:10px;text-align:center;color:#666;">0 allowed shows</div>
-                {% else %}
-                    {% for show in allowed_shows %}
-                    <div class="list-card" style="cursor: pointer;" onclick="const cb = document.getElementById('cb_allowed_{{ loop.index }}'); cb.checked = !cb.checked; syncCb(cb.value, cb.checked);">
-                        <div style="flex: 1; overflow: hidden;">
-                            <div class="list-title">{{ show }}</div>
-                        </div>
-                        <div class="btn-group" onclick="event.stopPropagation()">
-                            <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
-                                <input type="checkbox" id="cb_allowed_{{ loop.index }}" class="checkbox show-checkbox" value="{{ show }}" checked onchange="syncCb(this.value, this.checked)">
-                                <div class="custom-checkbox">
-                                    <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-                                    <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
-                                </div>
-                            </label>
-                        </div>
-                    </div>
-                    {% endfor %}
-                {% endif %}
-            </div>
-        </div>
-        <div id="total-shows-tab" class="tab-content">
-            <div class="item-list" id="totalShowsList">
-                {% for show in all_shows %}
-                <div class="list-card" style="cursor: pointer;" onclick="const cb = document.getElementById('cb_total_{{ loop.index }}'); cb.checked = !cb.checked; syncCb(cb.value, cb.checked);">
-                    <div style="flex: 1; overflow: hidden;">
-                        <div class="list-title">{{ show }}</div>
-                    </div>
-                    <div class="btn-group" onclick="event.stopPropagation()">
-                        <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
-                            <input type="checkbox" id="cb_total_{{ loop.index }}" class="checkbox show-checkbox" value="{{ show }}" {% if show in allowed_shows %}checked{% endif %} onchange="syncCb(this.value, this.checked)">
-                            <div class="custom-checkbox">
-                                <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-                                <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        <div id="settings-tab" class="tab-content">
-            <div class="card" style="margin-bottom: 20px;">
-                <h3 style="margin-bottom: 10px;">User Name</h3>
-                <input type="text" id="userNameInput" value="{{ name }}" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0; box-sizing: border-box; margin-bottom: 20px; font-family: inherit; font-size: 15px;">
-                
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
-                    <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
-                        <input type="checkbox" id="cb_set_cover" class="checkbox" {% if set_cover %}checked{% endif %}>
-                        <div class="custom-checkbox">
-                            <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-                            <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
-                        </div>
-                    </label>
-                    <label for="cb_set_cover" style="font-size: 15px; font-weight: 500; cursor: pointer;">Set audio cover in episode</label>
-                </div>
-                
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
-                        <input type="checkbox" id="cb_set_artist" class="checkbox" {% if set_artist %}checked{% endif %}>
-                        <div class="custom-checkbox">
-                            <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-                            <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
-                        </div>
-                    </label>
-                    <label for="cb_set_artist" style="font-size: 15px; font-weight: 500; cursor: pointer;">Set artist name in episode</label>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div style="position: fixed; bottom: 0; left: 0; width: 100%; background: #ffffff; border-top: 1px solid #e0e0e0; padding: 15px; box-sizing: border-box; display: flex; justify-content: center; z-index: 1000;">
-        <div style="width: 100%; max-width: 800px;">
-            <button id="updateBtn" class="primary-btn" onclick="updateAll()">Update</button>
-        </div>
-    </div>
-
-    <script>
-        function syncCb(val, checked) {
-            document.querySelectorAll('.show-checkbox').forEach(cb => {
-                if (cb.value === val) cb.checked = checked;
-            });
-        }
-
-        function switchTab(tabId, event) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-            event.currentTarget.classList.add('active');
-            document.getElementById(tabId).classList.add('active');
-        }
-
-        function updateAll() {
-            const btn = document.getElementById('updateBtn');
-            btn.disabled = true;
-            btn.innerHTML = 'Updating';
-            
-            const checkboxes = document.querySelectorAll('.show-checkbox');
-            let newAllowed = [];
-            checkboxes.forEach(cb => {
-                if (cb.checked) newAllowed.push(cb.value);
-            });
-            newAllowed = [...new Set(newAllowed)];
-            
-            const userName = document.getElementById('userNameInput').value;
-            const setCover = document.getElementById('cb_set_cover').checked;
-            const setArtist = document.getElementById('cb_set_artist').checked;
-
-            fetch('/api/buyers/{{ userid }}/update_all', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    shows: newAllowed,
-                    name: userName,
-                    set_cover: setCover,
-                    set_artist: setArtist
-                })
-            }).then(r => r.json()).then(res => {
-                btn.disabled = false;
-                if(res.success) {
-                    btn.innerHTML = 'Updated';
-                    btn.style.backgroundColor = '#2b8a3e';
-                    
-                    const allowedList = res.shows || [];
-                    const allowedTab = document.querySelector('#allowed-shows-tab .item-list');
-                    if (allowedList.length === 0) {
-                        allowedTab.innerHTML = '<div style="padding:10px;text-align:center;color:#666;">0 allowed shows</div>';
-                    } else {
-                        allowedTab.innerHTML = allowedList.map((show, index) => `
-                            <div class="list-card" style="cursor: pointer;" onclick="const cb = document.getElementById('cb_allowed_dyn_${index}'); cb.checked = !cb.checked; syncCb(cb.value, cb.checked);">
-                                <div style="flex: 1; overflow: hidden;">
-                                    <div class="list-title">${show}</div>
-                                </div>
-                                <div class="btn-group" onclick="event.stopPropagation()">
-                                    <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
-                                        <input type="checkbox" id="cb_allowed_dyn_${index}" class="checkbox show-checkbox" value="${show}" checked onchange="syncCb(this.value, this.checked)">
-                                        <div class="custom-checkbox">
-                                            <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-                                            <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
-                                        </div>
-                                    </label>
-                                </div>
-                            </div>
-                        `).join('');
-                    }
-                    
-                    setTimeout(() => {
-                        btn.innerHTML = 'Update';
-                        btn.style.backgroundColor = '#2481cc';
-                    }, 2000);
-                } else {
-                    btn.innerHTML = 'Update';
-                    alert('Failed to update allowed shows');
-                }
-            }).catch(e => {
-                btn.disabled = false;
-                btn.innerHTML = 'Update';
-                alert('Error updating shows');
-            });
-        }
-    </script>
-</body>
-</html>
-"""
-
-SHOW_USERS_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BotZilla Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Outfit', sans-serif; background-color: #f0f2f5; margin: 0; padding: 0; color: #1c1e21; -webkit-user-select: none; user-select: none; }
-        .action-bar { position: sticky; top: 0; z-index: 100; box-sizing: border-box; height: 48px; background: #2481cc; color: white; padding: 0 10px; gap: 10px; display: flex; align-items: center; }
-        .navbar-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: white; cursor: pointer; }
-        .navbar-title { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
-        .container { max-width: 800px; margin: 0 auto; padding: 15px; padding-bottom: 80px; }
-        .item-list { display: flex; flex-direction: column; gap: 0; background: #ffffff; border-radius: 10px; overflow: hidden; border: 1px solid #e0e0e0; }
-        .list-card { background: transparent; border-radius: 0; padding: 10px; border: none; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
-        .list-card:last-child { border-bottom: none; }
-        .list-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
-        .list-subtitle { font-size: 13px; color: #666; margin-top: 5px; }
-        .primary-btn { width: 100%; padding: 12px; background: #2481cc; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
-        .primary-btn:disabled { opacity: 0.7; cursor: not-allowed; }
-        .btn-group { display: flex; gap: 10px; }
-        .checkbox { display: none; }
-        .custom-checkbox { width: 24px; height: 24px; cursor: pointer; color: #2481cc; flex-shrink: 0; }
-        .custom-checkbox .checked-icon { display: none; }
-        .custom-checkbox .unchecked-icon { display: block; color: #999; }
-        input[type="checkbox"]:checked ~ .custom-checkbox .checked-icon { display: block; }
-        input[type="checkbox"]:checked ~ .custom-checkbox .unchecked-icon { display: none; }
-    </style>
-</head>
-<body>
-    <div class="action-bar">
-        <div class="navbar-icon" onclick="window.location.href='/'">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-left-icon lucide-arrow-left"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
-        </div>
-        <div class="navbar-title">BotZilla Dashboard</div>
-    </div>
-    
-    <div class="container">
-        <div class="item-list" id="usersList">
-            {% for buyer_id, buyer_data in buyers.items() %}
-            <div class="list-card" style="cursor: pointer;" onclick="const cb = document.getElementById('cb_{{ buyer_id }}'); cb.checked = !cb.checked; syncCb('{{ buyer_id }}', cb.checked);">
-                <div style="flex: 1; overflow: hidden;">
-                    <div class="list-title">{{ buyer_data.name or buyer_id }}</div>
-                    <div class="list-subtitle">{{ buyer_id }}{% if buyer_data.username %} @{{ buyer_data.username }}{% endif %}</div>
-                </div>
-                <div class="btn-group" onclick="event.stopPropagation()">
-                    <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
-                        <input type="checkbox" id="cb_{{ buyer_id }}" class="checkbox user-checkbox" value="{{ buyer_id }}" {% if show_name in buyer_data.allowed_shows|default([]) %}checked{% endif %} onchange="syncCb(this.value, this.checked)">
-                        <div class="custom-checkbox">
-                            <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-                            <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
-                        </div>
-                    </label>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-
-    <div style="position: fixed; bottom: 0; left: 0; width: 100%; background: #ffffff; border-top: 1px solid #e0e0e0; padding: 15px; box-sizing: border-box; display: flex; justify-content: center; z-index: 1000;">
-        <div style="width: 100%; max-width: 800px;">
-            <button id="updateBtn" class="primary-btn" onclick="updateUsers()">Update</button>
-        </div>
-    </div>
-
-    <script>
-        function syncCb(val, checked) {
-            document.querySelectorAll('.user-checkbox').forEach(cb => {
-                if (cb.value === val) cb.checked = checked;
-            });
-        }
-
-        function updateUsers() {
-            const btn = document.getElementById('updateBtn');
-            btn.disabled = true;
-            btn.innerHTML = 'Updating';
-            
-            const checkboxes = document.querySelectorAll('.user-checkbox');
-            let allowedUsers = [];
-            checkboxes.forEach(cb => {
-                if (cb.checked) allowedUsers.push(cb.value);
-            });
-            allowedUsers = [...new Set(allowedUsers)];
-            
-            fetch('/api/shows/{{ show_name|urlencode }}/users', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(allowedUsers)
-            }).then(r => r.json()).then(res => {
-                btn.disabled = false;
-                if(res.success) {
-                    btn.innerHTML = 'Updated';
-                    btn.style.backgroundColor = '#2b8a3e';
-                    setTimeout(() => {
-                        btn.innerHTML = 'Update';
-                        btn.style.backgroundColor = '#2481cc';
-                    }, 2000);
-                } else {
-                    btn.innerHTML = 'Update';
-                    alert('Failed to update access');
-                }
-            }).catch(e => {
-                btn.disabled = false;
-                btn.innerHTML = 'Update';
-                alert('Error updating access');
-            });
-        }
-    </script>
-</body>
-</html>
-"""
-
-def get_shows():
-    if not os.path.exists(SHOWS_FILE):
-        return {}
-    with open(SHOWS_FILE, 'r') as f:
         try:
-            return json.load(f)
-        except:
-            return {}
-
-def save_shows(shows):
-    with open(SHOWS_FILE, 'w') as f:
-        json.dump(shows, f, indent=4)
-
-def get_allowed_users():
-    if not os.path.exists(ALLOWED_USERS_FILE):
-        return {}
-    with open(ALLOWED_USERS_FILE, 'r') as f:
-        try:
-            data = json.load(f)
-            if isinstance(data, list):
-                return {str(uid): {"name": "Unknown", "status": "active"} for uid in data}
-            return data
-        except:
-            return {}
-
-def save_allowed_users(users):
-    with open(ALLOWED_USERS_FILE, 'w') as f:
-        json.dump(users, f, indent=4)
-
-def get_admins():
-    if not os.path.exists(ADMINS_FILE):
-        return []
-    with open(ADMINS_FILE, 'r') as f:
-        try:
-            return json.load(f)
-        except:
-            return []
-
-def save_admins(admins):
-    with open(ADMINS_FILE, 'w') as f:
-        json.dump(admins, f, indent=4)
-
-def get_all_users():
-    if not os.path.exists(ALL_USERS_FILE):
-        return {}
-    with open(ALL_USERS_FILE, 'r') as f:
-        try:
-            data = json.load(f)
-            for k, v in data.items():
-                if isinstance(v, str):
-                    data[k] = {"name": v, "username": None}
-            return data
-        except:
-            return {}
-
-def save_all_users(users):
-    with open(ALL_USERS_FILE, 'w') as f:
-        json.dump(users, f, indent=4)
-
-def get_pocketfm_auth():
-    if not os.path.exists(POCKETFM_AUTH_FILE):
-        default_auth = {
-            "uid": "a5fe3866d35c4094011d4e2d7020a4a3d0d0eef3",
-            "device_id": "SBDIHHLLYX3",
-            "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjYXRlZ29yeSI6ImFjY2VzcyIsImRldmljZV9pZCI6IlNCRElISExMWVgzIiwiZXhwaXJ5IjoxNzgwOTgxNjQ4LCJpYXQiOjE3ODA4MDg4NDgsImxvY2FsZSI6IklOIiwicGxhdGZvcm0iOiJhbmRyb2lkIiwicm9sZSI6Ikxpc3RlbmVyIiwidGVuYW50IjoicG9ja2V0X2ZtIiwidWlkIjoiYTVmZTM4NjZkMzVjNDA5NDAxMWQ0ZTJkNzAyMGE0YTNkMGQwZWVmMyIsInZlcnNpb24iOiJ2MiJ9.bjTZL8S-clyUXNLK7PQyoHQ2NRxgygN_i4wDHwnJ0-s",
-            "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjYXRlZ29yeSI6InJlZnJlc2giLCJkZXZpY2VfaWQiOiJTQkRJSEhMTFlYMyIsImV4cGlyeSI6MTc5NTE1ODkxNiwiaWF0IjoxNzc5NjA2OTE2LCJsb2NhbGUiOiJJTiIsInBsYXRmb3JtIjoiYW5kcm9pZCIsInRlbmFudCI6InBvY2tldF9mbSIsInVpZCI6ImE1ZmUzODY2ZDM1YzQwOTQwMTFkNGUyZDcwMjBhNGEzZDBkMGVlZjMiLCJ2ZXJzaW9uIjoidjIifQ.PmsLPVv4KP2vF11cpyh2NZ1-I91h2HRhENJyn-7rhNg"
-        }
-        with open(POCKETFM_AUTH_FILE, "w") as f:
-            json.dump(default_auth, f, indent=4)
-        return default_auth
-    with open(POCKETFM_AUTH_FILE, "r") as f:
-        return json.load(f)
-
-def save_pocketfm_auth(auth_data):
-    with open(POCKETFM_AUTH_FILE, "w") as f:
-        json.dump(auth_data, f, indent=4)
-
-def parse_keys_input(text: str) -> dict:
-    import re
-    keys = {}
-    for line in re.split(r'[,\n]+', text):
-        line = line.strip()
-        if ':' in line:
-            parts = line.split(':', 1)
-            kid = parts[0].strip().lower()
-            key = parts[1].strip().lower()
-            keys[kid] = key
-    return keys
-
-@flask_app.route('/')
-def index():
-    return render_template_string(HTML_TEMPLATE)
-
-@flask_app.route('/user/<userid>')
-def user_page(userid):
-    users = get_all_users()
-    buyers = get_allowed_users()
-    shows = get_shows()
-    
-    buyer = buyers.get(userid, {})
-    user = users.get(userid, {})
-    name = buyer.get("name") or user.get("name") or "Unknown"
-    allowed_shows = buyer.get("allowed_shows", [])
-    set_cover = buyer.get("set_cover", False)
-    set_artist = buyer.get("set_artist", False)
-    
-    return render_template_string(USER_SHOWS_TEMPLATE, userid=userid, name=name, allowed_shows=sorted(allowed_shows, key=lambda x: x.lower()), all_shows=sorted(list(shows.keys()), key=lambda x: x.lower()), set_cover=set_cover, set_artist=set_artist)
-
-@flask_app.route('/show/<name>')
-def show_page(name):
-    buyers = get_allowed_users()
-    users = get_all_users()
-    owner_str_ids = [str(x) for x in OWNER_IDS]
-    filtered_buyers = {}
-    
-    for k, v in buyers.items():
-        if k not in owner_str_ids:
-            user_data = users.get(k, {})
-            merged = v.copy()
-            merged["name"] = v.get("name") or user_data.get("name") or "Unknown"
-            merged["username"] = user_data.get("username") or ""
-            filtered_buyers[k] = merged
+            client = task['client']
+            chat_id = task['chat_id']
+            show_id = task['show_id']
+            mode = task['mode']
+            episodes = task['episodes']
             
-    filtered_buyers = dict(sorted(filtered_buyers.items(), key=lambda item: item[1].get("name", "").lower()))
-    return render_template_string(SHOW_USERS_TEMPLATE, show_name=name, buyers=filtered_buyers)
+            await run_batch_download(client, chat_id, user_id, show_id, mode, episodes)
+        except Exception as e:
+            logger.error(f"Queue error for {user_id}: {e}")
+        finally:
+            user_queues[user_id].task_done()
 
-@flask_app.route('/api/shows', methods=['GET'])
-def api_get_shows():
-    shows = get_shows()
-    buyers = get_allowed_users()
-    sanitized = {name: {"allowed_count": sum(1 for b in buyers.values() if name in b.get("allowed_shows", []))} for name in shows.keys()}
-    return jsonify(sanitized)
+from db import get_shows, save_shows, get_allowed_users, save_allowed_users, get_admins, save_admins, get_all_users, save_all_users, get_pocketfm_auth, save_pocketfm_auth
+from dashboard import start_flask
 
-@flask_app.route('/api/shows', methods=['POST'])
-def api_add_show():
-    data = request.json
-    name = data.get('name')
-    show_id = data.get('id')
-    keys_text = data.get('keys_text')
-    
-    if not name or not show_id or not keys_text:
-        return jsonify({"success": False, "error": "All fields are required"})
-    
-    shows = get_shows()
-    keys_dict = parse_keys_input(keys_text)
-    
-    shows[name] = {
-        "id": show_id,
-        "keys": keys_dict
-    }
-    save_shows(shows)
-    return jsonify({"success": True})
-
-@flask_app.route('/api/shows/<name>', methods=['DELETE'])
-def api_delete_show(name):
-    shows = get_shows()
-    if name in shows:
-        del shows[name]
-        save_shows(shows)
-    return jsonify({"success": True})
-
-@flask_app.route('/api/shows/<name>/users', methods=['POST'])
-def api_update_show_users(name):
-    allowed_users = request.json
-    if allowed_users is None:
-        allowed_users = []
-    
-    buyers = get_allowed_users()
-    
-    for buyer_id, buyer_data in buyers.items():
-        if "allowed_shows" not in buyer_data:
-            buyer_data["allowed_shows"] = []
-            
-        if str(buyer_id) in allowed_users:
-            if name not in buyer_data["allowed_shows"]:
-                buyer_data["allowed_shows"].append(name)
-        else:
-            if name in buyer_data["allowed_shows"]:
-                buyer_data["allowed_shows"].remove(name)
-                
-    save_allowed_users(buyers)
-    return jsonify({"success": True})
-
-@flask_app.route('/api/buyers', methods=['GET'])
-def api_get_buyers():
-    buyers = get_allowed_users()
-    owner_str_ids = [str(x) for x in OWNER_IDS]
-    filtered_buyers = {k: v for k, v in buyers.items() if k not in owner_str_ids}
-    return jsonify(filtered_buyers)
-
-@flask_app.route('/api/buyers/<userid>/shows', methods=['POST'])
-def api_update_buyer_shows(userid):
-    allowed_shows = request.json
-    if not isinstance(allowed_shows, list):
-        return jsonify({"success": False})
-        
-    allowed = get_allowed_users()
-    if userid in allowed:
-        allowed[userid]["allowed_shows"] = allowed_shows
-        save_allowed_users(allowed)
-        return jsonify({"success": True, "shows": allowed_shows})
-    return jsonify({"success": False})
-
-@flask_app.route('/api/buyers/<userid>/update_all', methods=['POST'])
-def api_update_buyer_all(userid):
-    data = request.json
-    if not isinstance(data, dict):
-        return jsonify({"success": False})
-        
-    allowed = get_allowed_users()
-    if userid in allowed:
-        allowed[userid]["allowed_shows"] = data.get("shows", [])
-        
-        # Save name in Title Case format
-        name = data.get("name", "")
-        allowed[userid]["name"] = name.title() if name else ""
-        
-        set_cover = data.get("set_cover", False)
-        set_artist = data.get("set_artist", False)
-        
-        allowed[userid]["set_cover"] = set_cover
-        allowed[userid]["set_artist"] = set_artist
-        
-        if not set_artist and "artist_name" in allowed[userid]:
-            del allowed[userid]["artist_name"]
-            
-        if not set_cover:
-            if "has_cover" in allowed[userid]:
-                del allowed[userid]["has_cover"]
-            cover_path = os.path.join(BOT_DIR, "covers", f"{userid}.jpg")
-            if os.path.exists(cover_path):
-                try:
-                    os.remove(cover_path)
-                except:
-                    pass
-        
-        save_allowed_users(allowed)
-        return jsonify({"success": True, "shows": data.get("shows", [])})
-    return jsonify({"success": False})
-
-@flask_app.route('/api/buyers/<userid>/toggle', methods=['POST'])
-def api_toggle_buyer(userid):
-    allowed = get_allowed_users()
-    if userid in allowed:
-        curr = allowed[userid].get("status", "active")
-        allowed[userid]["status"] = "paused" if curr == "active" else "active"
-        save_allowed_users(allowed)
-        return jsonify({"success": True})
-    return jsonify({"success": False})
-
-@flask_app.route('/api/users', methods=['GET'])
-def api_get_users():
-    users = get_all_users()
-    owner_str_ids = [str(x) for x in OWNER_IDS]
-    filtered_users = {k: v for k, v in users.items() if k not in owner_str_ids}
-    return jsonify(filtered_users)
-
-@flask_app.route('/api/avatars/<uid>')
-def api_get_avatar(uid):
-    avatar_path = os.path.join(AVATARS_DIR, f"{uid}.jpg")
-    if os.path.exists(avatar_path):
-        return send_file(avatar_path, mimetype='image/jpeg')
-    return "", 404
-
-def start_flask(port):
-    flask_app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
 
 
 
@@ -1411,15 +502,15 @@ async def cmd_start(client: Client, message: Message):
     if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP] and (is_owner or is_admin):
         has_mp4decrypt = check_tool(MP4DECRYPT_PATH)
         await message.reply_text(
-            "Widevine DRM Downloader\n\n"
+            "BotZilla Downloader\n\n"
             "Commands\n"
-            "/dashboard — Show Dashboard URL\n"
-            "/allow — Allow user\n"
-            "/remove — Remove user\n\n"
+            "/dashboard Show Dashboard URL\n"
+            "/allow Allow user\n"
+            "/remove Remove user\n\n"
             "Owner Only\n"
-            "/admin — Add admin\n"
-            "/radmin — Remove admin\n"
-            "/update — Pull and restart",
+            "/admin Add admin\n"
+            "/radmin Remove admin\n"
+            "/update Pull and restart",
             quote=False,
         )
     else:
@@ -1430,7 +521,7 @@ async def cmd_start(client: Client, message: Message):
         
         reply_msg = (
             f"Hey {name}\n\n"
-            "Use below command to access bot...\n\n"
+            "Use below command to access bot\n\n"
             "/show_list Get show list"
         )
         
@@ -1460,9 +551,9 @@ async def cmd_admin(client: Client, message: Message):
     if user_id not in admins:
         admins.append(user_id)
         save_admins(admins)
-        await message.reply_text(f"User {user_id} is now an Admin.", quote=False)
+        await message.reply_text(f"User {user_id} is now an Admin...", quote=False)
     else:
-        await message.reply_text(f"User {user_id} is already an Admin.", quote=False)
+        await message.reply_text(f"User {user_id} is already an Admin...", quote=False)
 
 @app.on_message(filters.command("radmin"))
 @owner_only
@@ -1480,9 +571,9 @@ async def cmd_radmin(client: Client, message: Message):
     if user_id in admins:
         admins.remove(user_id)
         save_admins(admins)
-        await message.reply_text(f"User {user_id} is removed from Admins.", quote=False)
+        await message.reply_text(f"User {user_id} is removed from Admins...", quote=False)
     else:
-        await message.reply_text(f"User {user_id} was not an Admin.", quote=False)
+        await message.reply_text(f"User {user_id} was not an Admin...", quote=False)
 
 @app.on_message(filters.command(["dash", "dashboard"]))
 @admin_or_owner
@@ -1527,7 +618,7 @@ async def cmd_cancel(client: Client, message: Message):
 async def cmd_allow(client: Client, message: Message):
     args = message.text.split(" ", 2)
     if len(args) < 3:
-        await message.reply_text("Usage: /allow userid name", quote=False)
+        await message.reply_text("Try /allow userid name", quote=False)
         return
     try:
         user_id = int(args[1])
@@ -1541,17 +632,17 @@ async def cmd_allow(client: Client, message: Message):
     if uid_str not in allowed:
         allowed[uid_str] = {"name": name, "status": "active"}
         save_allowed_users(allowed)
-        await message.reply_text(f"User {name} ({user_id}) is now allowed.", quote=False)
+        await message.reply_text(f"{name}\n<code>{user_id}</code> is now allowed...", quote=False)
     else:
         allowed[uid_str]["name"] = name
         save_allowed_users(allowed)
-        await message.reply_text(f"User {user_id} is already allowed, name updated.", quote=False)
+        await message.reply_text(f"User {user_id} is already allowed, name updated...", quote=False)
 
 @app.on_message(filters.command("remove"))
 @admin_or_owner
 async def cmd_remove(client: Client, message: Message):
     if len(message.command) < 2:
-        await message.reply_text("Usage: /remove userid", quote=False)
+        await message.reply_text("Try /remove userid", quote=False)
         return
     try:
         user_id = int(message.command[1])
@@ -1564,9 +655,9 @@ async def cmd_remove(client: Client, message: Message):
     if uid_str in allowed:
         del allowed[uid_str]
         save_allowed_users(allowed)
-        await message.reply_text(f"User {user_id} access removed.", quote=False)
+        await message.reply_text(f"User {user_id} access removed...", quote=False)
     else:
-        await message.reply_text(f"User {user_id} was not in the allowed list.", quote=False)
+        await message.reply_text(f"User {user_id} was not in the allowed list...", quote=False)
 
 @app.on_message(filters.command("update"))
 @owner_only
@@ -1887,26 +978,38 @@ async def show_details_callback(client: Client, query):
 async def dlall_callback(client: Client, query):
     show_id = query.matches[0].group(1)
     user_id = query.from_user.id
-    if download_flags.get(user_id):
-        await query.answer("A task is already running. Please wait it to finish...", show_alert=True)
+    
+    if user_id not in user_queues:
+        user_queues[user_id] = asyncio.Queue(maxsize=5)
+        asyncio.create_task(process_user_queue(user_id))
+        
+    if user_queues[user_id].full():
+        await query.answer("Waiting list is full (Max 5)\nPlease wait for current tasks to finish...", show_alert=True)
         return
         
     try:
         await query.message.edit_reply_markup(reply_markup=None)
     except:
         pass
-    await client.send_message(query.message.chat.id, "Downloading all episodes...\n\nIf you want to cancel or stop the process just send /stop")
+        
+    await user_queues[user_id].put({"client": client, "chat_id": query.message.chat.id, "show_id": show_id, "mode": "all", "episodes": []})
     
-    download_flags[user_id] = True
-    asyncio.create_task(run_batch_download(client, query.message.chat.id, user_id, show_id, mode="all", episodes=[]))
+    if download_flags.get(user_id):
+        await query.answer(f"Added to waiting list...\nPosition {user_queues[user_id].qsize()}", show_alert=True)
+    else:
+        await query.answer("Download started...", show_alert=False)
 
 @app.on_callback_query(filters.regex(r"^dlsel_(.+)$"))
 @authorized_only
 async def dlsel_callback(client: Client, query):
     show_id = query.matches[0].group(1)
     user_id = query.from_user.id
-    if download_flags.get(user_id):
-        await query.answer("A task is already running. Please wait it to finish...", show_alert=True)
+    if user_id not in user_queues:
+        user_queues[user_id] = asyncio.Queue(maxsize=5)
+        asyncio.create_task(process_user_queue(user_id))
+        
+    if user_queues[user_id].full():
+        await query.answer("Waiting list is full (Max 5)\nPlease wait for current tasks to finish...", show_alert=True)
         return
         
     try:
@@ -1928,8 +1031,17 @@ async def cmd_stop(client: Client, message: Message):
     user_id = message.from_user.id
     if download_flags.get(user_id):
         download_flags[user_id] = False
+    
+    if user_id in user_queues:
+        while not user_queues[user_id].empty():
+            try:
+                user_queues[user_id].get_nowait()
+                user_queues[user_id].task_done()
+            except:
+                pass
+        await message.reply_text("Process stopped and waiting list is cleared...", quote=False)
     else:
-        await message.reply_text("No active process to stop...")
+        await message.reply_text("No active process to stop...", quote=False)
 
 @app.on_message(filters.command("set_cover"))
 @authorized_only
@@ -1952,6 +1064,7 @@ async def cmd_set_artist(client: Client, message: Message):
     await message.reply_text("Send the artist name you want to set for episodes...", quote=False)
 
 async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
+    download_flags[user_id] = True
     try:
         shows = get_shows()
         keys = {}
@@ -1976,9 +1089,14 @@ async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
         if mode == "all":
             start_ep = 1
             end_ep = total_ep
+            await client.send_message(chat_id, "Downloading all episodes...\n\nIf you want to cancel or stop the process just send /stop")
         else:
             start_ep = episodes[0]
             end_ep = min(episodes[1], total_ep)
+            if start_ep == end_ep:
+                await client.send_message(chat_id, f"Downloading Ep - {start_ep}\n\nIf you want to cancel or stop the process just send /stop")
+            else:
+                await client.send_message(chat_id, f"Downloading Ep from {start_ep} - {end_ep}\n\nIf you want to cancel or stop the process just send /stop")
             
         for ep_num in range(start_ep, end_ep + 1):
             if not download_flags.get(user_id):
@@ -2025,79 +1143,81 @@ async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
             mpd_base_url = mpd_url.rsplit("/", 1)[0]
             audio_url = f"{mpd_base_url}/{audio_info['file']}"
             
-            work_dir = tempfile.mkdtemp(prefix="drm_")
-            encrypted_file = os.path.join(work_dir, "encrypted_audio.mp4")
-            
-            if not await download_file(audio_url, encrypted_file, None):
-                await status_msg.delete()
-                continue
+            global global_download_semaphore
+            if global_download_semaphore is None:
+                global_download_semaphore = asyncio.Semaphore(5)
                 
-            safe_title = re.sub(r'[\\/*?:"<>|]', "", story_title).strip()
-            if not safe_title:
-                safe_title = f"Ep - {seq_num}"
-            output_name = safe_title
-            decrypted_file = os.path.join(work_dir, f"{output_name}.m4a")
-            
-            success, error_msg = await run_decrypt(MP4DECRYPT_PATH, keys, encrypted_file, decrypted_file)
-            if not success:
-                await status_msg.delete()
-                continue
-                
-            os.remove(encrypted_file)
-            
-            fixed_file = os.path.join(work_dir, f"{output_name}_fixed.m4a")
-            await fix_m4a_duration(decrypted_file, fixed_file)
-            
-            if not os.path.exists(fixed_file):
-                fixed_file = decrypted_file
-                
-            # Add metadata and cover if permitted
-            allowed = get_allowed_users()
-            user_data = allowed.get(str(user_id), {})
-            
-            artist_name = user_data.get("artist_name") if user_data.get("set_artist") else None
-            cover_path = os.path.join(BOT_DIR, "covers", f"{user_id}.jpg")
-            has_cover = os.path.exists(cover_path) and user_data.get("set_cover")
-
-            audio_duration = 0
-            try:
-                audio_info_mp4 = MP4(fixed_file)
-                audio_duration = int(audio_info_mp4.info.length)
-                
-                audio_info_mp4["\xa9nam"] = story_title
-                if artist_name:
-                    audio_info_mp4["\xa9ART"] = artist_name
-                if has_cover:
-                    with open(cover_path, "rb") as f:
-                        audio_info_mp4["covr"] = [MP4Cover(f.read(), imageformat=MP4Cover.FORMAT_JPEG)]
-                audio_info_mp4.save()
-            except Exception:
-                pass
-
-            await status_msg.edit_text(f"Uploading...\n\n{story_title}")
-            await client.send_chat_action(chat_id, ChatAction.UPLOAD_AUDIO)
-                
-            await client.send_audio(
-                chat_id=chat_id,
-                audio=fixed_file,
-                duration=audio_duration,
-                caption=story_title,
-                performer=artist_name,
-                title=story_title,
-                thumb=cover_path if has_cover else None,
-                file_name=f"{output_name}.m4a"
-            )
-            await status_msg.delete()
-            
-            for f in os.listdir(work_dir):
+            async with global_download_semaphore:
+                work_dir = tempfile.mkdtemp(prefix="drm_")
                 try:
-                    os.remove(os.path.join(work_dir, f))
-                except:
-                    pass
-            try:
-                os.rmdir(work_dir)
-            except:
-                pass
+                    encrypted_file = os.path.join(work_dir, "encrypted_audio.mp4")
+                    
+                    if not await download_file(audio_url, encrypted_file, None):
+                        await status_msg.delete()
+                        continue
+                        
+                    safe_title = re.sub(r'[\\/*?:"<>|]', "", story_title).strip()
+                    if not safe_title:
+                        safe_title = f"Ep - {seq_num}"
+                    output_name = safe_title
+                    decrypted_file = os.path.join(work_dir, f"{output_name}.m4a")
+                    
+                    success, error_msg = await run_decrypt(MP4DECRYPT_PATH, keys, encrypted_file, decrypted_file)
+                    if not success:
+                        await status_msg.delete()
+                        continue
+                        
+                    os.remove(encrypted_file)
+                    
+                    fixed_file = os.path.join(work_dir, f"{output_name}_fixed.m4a")
+                    await fix_m4a_duration(decrypted_file, fixed_file)
+                    
+                    if not os.path.exists(fixed_file):
+                        fixed_file = decrypted_file
+                    
+                    # Add metadata and cover if permitted
+                    allowed = get_allowed_users()
+                    user_data = allowed.get(str(user_id), {})
+                    
+                    artist_name = user_data.get("artist_name") if user_data.get("set_artist") else None
+                    cover_path = os.path.join(BOT_DIR, "covers", f"{user_id}.jpg")
+                    has_cover = os.path.exists(cover_path) and user_data.get("set_cover")
+
+                    audio_duration = 0
+                    def inject_metadata():
+                        nonlocal audio_duration
+                        audio_info_mp4 = MP4(fixed_file)
+                        audio_duration = int(audio_info_mp4.info.length)
+                        audio_info_mp4["\xa9nam"] = story_title
+                        if artist_name:
+                            audio_info_mp4["\xa9ART"] = artist_name
+                        if has_cover:
+                            with open(cover_path, "rb") as f:
+                                audio_info_mp4["covr"] = [MP4Cover(f.read(), imageformat=MP4Cover.FORMAT_JPEG)]
+                        audio_info_mp4.save()
+                        
+                    try:
+                        await asyncio.to_thread(inject_metadata)
+                    except Exception:
+                        pass
+
+                    await status_msg.edit_text(f"Uploading...\n\n{story_title}")
+                    await client.send_chat_action(chat_id, ChatAction.UPLOAD_AUDIO)
+                        
+                    await client.send_audio(
+                        chat_id=chat_id,
+                        audio=fixed_file,
+                        duration=audio_duration,
+                        caption=story_title,
+                        performer=artist_name,
+                        title=story_title,
+                        thumb=cover_path if has_cover else None,
+                        file_name=f"{output_name}.m4a"
+                    )
+                    await status_msg.delete()
+                finally:
+                    import shutil
+                    shutil.rmtree(work_dir, ignore_errors=True)
                 
         await client.send_message(chat_id, "Completed...")
         
@@ -2146,7 +1266,7 @@ async def handle_text(client: Client, message: Message):
         cover_path = os.path.join(covers_dir, f"{user_id}.jpg")
         
         await message.download(file_name=cover_path)
-        await message.reply_text("Cover photo saved successfully.")
+        await message.reply_text("Cover photo saved successfully...")
         del user_states[user_id]
         return
         
@@ -2162,7 +1282,7 @@ async def handle_text(client: Client, message: Message):
             allowed[uid_str]["artist_name"] = artist_name
             save_allowed_users(allowed)
             
-        await message.reply_text(f"Artist name saved successfully: {artist_name}")
+        await message.reply_text("Artist name saved successfully...")
         del user_states[user_id]
         return
 
@@ -2192,8 +1312,20 @@ async def handle_text(client: Client, message: Message):
                 await message.reply_text("Invalid episode number...\n\nSend episode number which you want to download...\n\nSingle 1\nMultiple 1 10")
                 return
                 
-            download_flags[user_id] = True
-            asyncio.create_task(run_batch_download(client, message.chat.id, user_id, show_id, mode="select", episodes=[start_ep, end_ep]))
+            if user_id not in user_queues:
+                user_queues[user_id] = asyncio.Queue(maxsize=5)
+                asyncio.create_task(process_user_queue(user_id))
+                
+            if user_queues[user_id].full():
+                await message.reply_text("Waiting list is full (Max 5)\nPlease wait for current tasks to finish...")
+                del user_states[user_id]
+                return
+                
+            await user_queues[user_id].put({"client": client, "chat_id": message.chat.id, "show_id": show_id, "mode": "select", "episodes": [start_ep, end_ep]})
+            
+            if download_flags.get(user_id):
+                await message.reply_text(f"Added to waiting list...\nPosition {user_queues[user_id].qsize()}")
+                
             del user_states[user_id]
         except:
             await message.reply_text("Invalid episode number...\n\nSend episode number which you want to download...\n\nSingle 1\nMultiple 1 10")
