@@ -123,6 +123,9 @@ def api_fetch_show_name():
             else:
                 return jsonify({"success": False, "error": "Failed to refresh token"})
                 
+        if data.get("status") == 0:
+            return jsonify({"success": True, "title": "Below show id is invalid"})
+            
         title = ""
         result = data.get("result", [])
         if result and isinstance(result, list):
