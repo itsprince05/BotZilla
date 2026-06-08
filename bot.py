@@ -99,8 +99,9 @@ HTML_TEMPLATE = """
         textarea { -ms-overflow-style: none; scrollbar-width: none; }
         .primary-btn { width: 100%; padding: 12px; background: #2481cc; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
         .primary-btn:hover { background: #1e6eb0; }
-        .item-list { display: flex; flex-direction: column; gap: 10px; }
-        .list-card { background: #ffffff; border-radius: 10px; padding: 10px; border: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
+        .item-list { display: flex; flex-direction: column; gap: 0; background: #ffffff; border-radius: 10px; overflow: hidden; border: 1px solid #e0e0e0; }
+        .list-card { background: transparent; border-radius: 0; padding: 12px 15px; border: none; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
+        .list-card:last-child { border-bottom: none; }
         .list-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
         .list-subtitle { font-size: 13px; color: #666; margin-top: 5px; }
         .btn-group { display: flex; gap: 10px; }
@@ -411,9 +412,10 @@ USER_SHOWS_TEMPLATE = """
         .tab-content.active { display: block; }
         .card { background: #ffffff; border-radius: 10px; padding: 15px; border: 1px solid #e0e0e0; box-sizing: border-box; }
         .card h3 { margin-top: 0; font-size: 16px; color: #1c1e21; margin-bottom: 5px; }
-        .list-card { background: #ffffff; border-radius: 10px; padding: 10px; border: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
+        .item-list { display: flex; flex-direction: column; gap: 0; background: #ffffff; border-radius: 10px; overflow: hidden; border: 1px solid #e0e0e0; }
+        .list-card { background: transparent; border-radius: 0; padding: 12px 15px; border: none; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
+        .list-card:last-child { border-bottom: none; }
         .list-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
-        .item-list { display: flex; flex-direction: column; gap: 10px; }
         .primary-btn { width: 100%; padding: 12px; background: #2481cc; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
         .primary-btn:disabled { opacity: 0.7; cursor: not-allowed; }
         .btn-group { display: flex; gap: 10px; }
@@ -621,10 +623,11 @@ SHOW_USERS_TEMPLATE = """
         .navbar-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: white; cursor: pointer; }
         .navbar-title { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
         .container { max-width: 800px; margin: 0 auto; padding: 15px; padding-bottom: 80px; }
-        .list-card { background: #ffffff; border-radius: 10px; padding: 10px; border: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
+        .item-list { display: flex; flex-direction: column; gap: 0; background: #ffffff; border-radius: 10px; overflow: hidden; border: 1px solid #e0e0e0; }
+        .list-card { background: transparent; border-radius: 0; padding: 12px 15px; border: none; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
+        .list-card:last-child { border-bottom: none; }
         .list-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
         .list-subtitle { font-size: 13px; color: #666; margin-top: 5px; }
-        .item-list { display: flex; flex-direction: column; gap: 10px; }
         .primary-btn { width: 100%; padding: 12px; background: #2481cc; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
         .primary-btn:disabled { opacity: 0.7; cursor: not-allowed; }
         .btn-group { display: flex; gap: 10px; }
