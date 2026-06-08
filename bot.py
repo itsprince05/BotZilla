@@ -833,9 +833,6 @@ def get_show_list_keyboard(shows_list, shows, page=1):
 @authorized_only
 async def cmd_shows_list(client: Client, message: Message):
     user_id = message.from_user.id
-    if download_flags.get(user_id):
-        await message.reply_text("A task is already running. Please wait it to finish...", quote=True)
-        return
     is_owner = OWNER_IDS and user_id in OWNER_IDS
     shows = get_shows()
     
@@ -845,7 +842,7 @@ async def cmd_shows_list(client: Client, message: Message):
         shows = {k: v for k, v in shows.items() if k in user_allowed}
         
     if not shows:
-        await message.reply_text("You have no allowed shows.", quote=False)
+        await message.reply_text("You have no allowed shows...", quote=False)
         return
         
     shows_list = sorted(list(shows.keys()), key=lambda x: x.lower())
@@ -980,11 +977,11 @@ async def dlall_callback(client: Client, query):
     user_id = query.from_user.id
     
     if user_id not in user_queues:
-        user_queues[user_id] = asyncio.Queue(maxsize=5)
+        user_queues[user_id] = asyncio.Queue(maxsize=3)
         asyncio.create_task(process_user_queue(user_id))
         
     if user_queues[user_id].full():
-        await query.answer("Waiting list is full (Max 5)\nPlease wait for current tasks to finish...", show_alert=True)
+        await query.answer("Waiting list is full (Max 3)\nPlease wait for current tasks to finish...", show_alert=True)
         return
         
     try:
@@ -1005,11 +1002,11 @@ async def dlsel_callback(client: Client, query):
     show_id = query.matches[0].group(1)
     user_id = query.from_user.id
     if user_id not in user_queues:
-        user_queues[user_id] = asyncio.Queue(maxsize=5)
+        user_queues[user_id] = asyncio.Queue(maxsize=3)
         asyncio.create_task(process_user_queue(user_id))
         
     if user_queues[user_id].full():
-        await query.answer("Waiting list is full (Max 5)\nPlease wait for current tasks to finish...", show_alert=True)
+        await query.answer("Waiting list is full (Max 3)\nPlease wait for current tasks to finish...", show_alert=True)
         return
         
     try:
@@ -1313,11 +1310,11 @@ async def handle_text(client: Client, message: Message):
                 return
                 
             if user_id not in user_queues:
-                user_queues[user_id] = asyncio.Queue(maxsize=5)
+                user_queues[user_id] = asyncio.Queue(maxsize=3)
                 asyncio.create_task(process_user_queue(user_id))
                 
             if user_queues[user_id].full():
-                await message.reply_text("Waiting list is full (Max 5)\nPlease wait for current tasks to finish...")
+                await message.reply_text("Waiting list is full (Max 3)\nPlease wait for current tasks to finish...")
                 del user_states[user_id]
                 return
                 
