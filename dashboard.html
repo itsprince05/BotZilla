@@ -253,9 +253,12 @@
             const showId = e.target.value.trim();
             const showNameInput = document.getElementById('showName');
             const loader = document.getElementById('showNameLoader');
+            const saveBtn = document.querySelector('#addShowForm button[type="submit"]');
             
             showNameInput.value = '';
             showNameInput.style.height = 'auto';
+            showNameInput.style.color = 'inherit';
+            saveBtn.disabled = true;
             
             if (fetchShowTimeout) clearTimeout(fetchShowTimeout);
             
@@ -273,6 +276,12 @@
                             showNameInput.value = res.title;
                             showNameInput.style.height = 'auto';
                             showNameInput.style.height = Math.min(showNameInput.scrollHeight, 90) + 'px';
+                            if (res.title === 'Below show id is invalid') {
+                                showNameInput.style.color = '#fa5252';
+                                saveBtn.disabled = true;
+                            } else {
+                                saveBtn.disabled = false;
+                            }
                         }
                     })
                     .catch(err => console.error(err))
@@ -286,6 +295,7 @@
             e.preventDefault();
             const btn = e.target.querySelector('button');
             const name = document.getElementById('showName').value;
+            if (name === 'Below show id is invalid') return;
             const id = document.getElementById('showId').value;
             const keysText = document.getElementById('decryptionKey').value;
             
