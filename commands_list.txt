@@ -1,0 +1,25 @@
+====================================
+BOT COMMANDS LIST
+====================================
+
+[ NORMAL USERS (DM ONLY) ]
+/start       - Start the bot and see available commands
+/show_list   - Get the list of allowed shows for download
+/running     - Check the currently running and waiting tasks
+/set_cover   - Set a custom cover photo for your downloaded episodes
+/set_artist  - Set a custom artist name for your downloaded episodes
+/stop        - Stop the current download and clear the waiting list
+
+
+[ ADMINS (GROUP OR DM) ]
+/dashboard   - Get the link to access the web dashboard
+/allow       - Allow a new user (Format: /allow <userid> <name>)
+/remove      - Remove an existing user (Format: /remove <userid>)
+/backup      - Generate and download a zip backup of the database
+
+
+[ OWNER ONLY (GROUP OR DM) ]
+/admin       - Add a new admin (Format: /admin <userid>)
+/radmin      - Remove an admin (Format: /radmin <userid>)
+/update      - Pull latest code from GitHub and restart the bot
+/restore     - Restore the database from a zip backup (Must reply to a .zip file)
