@@ -16,7 +16,7 @@ import threading
 import platform
 
 import aiohttp
-from mutagen.mp4 import MP4
+from mutagen.mp4 import MP4, MP4Cover
 from pyrogram import Client, filters
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.enums import ChatType, ChatAction
@@ -474,12 +474,12 @@ USER_SHOWS_TEMPLATE = """
                 
                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
                     <input type="checkbox" id="cb_set_cover" class="checkbox" {% if set_cover %}checked{% endif %}>
-                    <label for="cb_set_cover" style="font-size: 15px; font-weight: 500; cursor: pointer;">Set Audio Cover</label>
+                    <label for="cb_set_cover" style="font-size: 15px; font-weight: 500; cursor: pointer;">Set audio cover in episode</label>
                 </div>
                 
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <input type="checkbox" id="cb_set_artist" class="checkbox" {% if set_artist %}checked{% endif %}>
-                    <label for="cb_set_artist" style="font-size: 15px; font-weight: 500; cursor: pointer;">Set Artist Name</label>
+                    <label for="cb_set_artist" style="font-size: 15px; font-weight: 500; cursor: pointer;">Set artist name in episode</label>
                 </div>
             </div>
         </div>
@@ -885,7 +885,11 @@ def api_update_buyer_all(userid):
     allowed = get_allowed_users()
     if userid in allowed:
         allowed[userid]["allowed_shows"] = data.get("shows", [])
-        allowed[userid]["name"] = data.get("name", "")
+        
+        # Save name in Title Case format
+        name = data.get("name", "")
+        allowed[userid]["name"] = name.title() if name else ""
+        
         allowed[userid]["set_cover"] = data.get("set_cover", False)
         allowed[userid]["set_artist"] = data.get("set_artist", False)
         save_allowed_users(allowed)
@@ -1465,7 +1469,7 @@ async def cmd_allow(client: Client, message: Message):
         await message.reply_text("Invalid userid.", quote=False)
         return
         
-    name = args[2].strip()
+    name = args[2].strip().title()
     uid_str = str(user_id)
     allowed = get_allowed_users()
     if uid_str not in allowed:
@@ -1861,6 +1865,26 @@ async def cmd_stop(client: Client, message: Message):
     else:
         await message.reply_text("No active process to stop...")
 
+@app.on_message(filters.command("set_cover"))
+@authorized_only
+async def cmd_set_cover(client: Client, message: Message):
+    uid_str = str(message.from_user.id)
+    allowed = get_allowed_users()
+    if not allowed.get(uid_str, {}).get("set_cover"):
+        return
+    user_states[message.from_user.id] = {"step": "ASK_COVER"}
+    await message.reply_text("Send the cover photo you want to set for episodes...", quote=False)
+
+@app.on_message(filters.command("set_artist"))
+@authorized_only
+async def cmd_set_artist(client: Client, message: Message):
+    uid_str = str(message.from_user.id)
+    allowed = get_allowed_users()
+    if not allowed.get(uid_str, {}).get("set_artist"):
+        return
+    user_states[message.from_user.id] = {"step": "ASK_ARTIST"}
+    await message.reply_text("Send the artist name you want to set for episodes...", quote=False)
+
 async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
     try:
         shows = get_shows()
@@ -1913,7 +1937,7 @@ async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
             if not mpd_url:
                 await client.send_message(
                     chat_id,
-                    f"URL not found for Ep - {seq_num}\n\n{story_title}\n\nContact Admin"
+                    f"Ep - {seq_num} was not found\n\n{story_title}\n\nContact Admin"
                 )
                 continue
                 
@@ -1925,7 +1949,8 @@ async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
                 continue
                 
             qualities = get_mpd_qualities(mpd_content)
-            quality = "128k" if "128k" in qualities else (qualities[0] if qualities else "128k")
+            # Always choose the lowest quality representation
+            quality = qualities[0] if qualities else "128k"
             audio_info = parse_mpd(mpd_content, quality)
             if not audio_info:
                 await status_msg.delete()
@@ -1941,7 +1966,10 @@ async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
                 await status_msg.delete()
                 continue
                 
-            output_name = f"Ep - {seq_num}"
+            safe_title = re.sub(r'[\\/*?:"<>|]', "", story_title).strip()
+            if not safe_title:
+                safe_title = f"Ep - {seq_num}"
+            output_name = safe_title
             decrypted_file = os.path.join(work_dir, f"{output_name}.m4a")
             
             success, error_msg = await run_decrypt(MP4DECRYPT_PATH, keys, encrypted_file, decrypted_file)
@@ -1957,21 +1985,40 @@ async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
             if not os.path.exists(fixed_file):
                 fixed_file = decrypted_file
                 
-            await status_msg.edit_text(f"Uploading...\n\n{story_title}")
-            await client.send_chat_action(chat_id, ChatAction.UPLOAD_AUDIO)
+            # Add metadata and cover if permitted
+            allowed = get_allowed_users()
+            user_data = allowed.get(str(user_id), {})
             
+            artist_name = user_data.get("artist_name") if user_data.get("set_artist") else None
+            cover_path = os.path.join(BOT_DIR, "covers", f"{user_id}.jpg")
+            has_cover = os.path.exists(cover_path) and user_data.get("set_cover")
+
             audio_duration = 0
             try:
                 audio_info_mp4 = MP4(fixed_file)
                 audio_duration = int(audio_info_mp4.info.length)
+                
+                audio_info_mp4["\xa9nam"] = story_title
+                if artist_name:
+                    audio_info_mp4["\xa9ART"] = artist_name
+                if has_cover:
+                    with open(cover_path, "rb") as f:
+                        audio_info_mp4["covr"] = [MP4Cover(f.read(), imageformat=MP4Cover.FORMAT_JPEG)]
+                audio_info_mp4.save()
             except Exception:
                 pass
+
+            await status_msg.edit_text(f"Uploading...\n\n{story_title}")
+            await client.send_chat_action(chat_id, ChatAction.UPLOAD_AUDIO)
                 
             await client.send_audio(
                 chat_id=chat_id,
                 audio=fixed_file,
                 duration=audio_duration,
                 caption=story_title,
+                performer=artist_name,
+                title=story_title,
+                thumb=cover_path if has_cover else None,
                 file_name=f"{output_name}.m4a"
             )
             await status_msg.delete()
@@ -2013,7 +2060,7 @@ async def drm_start(client: Client, message: Message):
     )
 
 
-@app.on_message(filters.text & ~filters.command(["start", "status", "cancel", "stop", "update", "drm", "shows_list", "allow", "remove", "dash", "dashboard"]))
+@app.on_message((filters.text | filters.photo) & ~filters.command(["start", "status", "cancel", "stop", "update", "drm", "shows_list", "allow", "remove", "dash", "dashboard", "set_cover", "set_artist"]))
 @authorized_only
 async def handle_text(client: Client, message: Message):
     user_id = message.from_user.id
@@ -2023,6 +2070,39 @@ async def handle_text(client: Client, message: Message):
     state = user_states[user_id]
     step = state.get("step")
     
+    if step == "ASK_COVER":
+        if not message.photo:
+            await message.reply_text("Please send a valid photo for the cover.")
+            return
+            
+        covers_dir = os.path.join(BOT_DIR, "covers")
+        os.makedirs(covers_dir, exist_ok=True)
+        cover_path = os.path.join(covers_dir, f"{user_id}.jpg")
+        
+        await message.download(file_name=cover_path)
+        await message.reply_text("Cover photo saved successfully.")
+        del user_states[user_id]
+        return
+        
+    if step == "ASK_ARTIST":
+        if not message.text:
+            await message.reply_text("Please send a valid text for the artist name.")
+            return
+            
+        artist_name = message.text.strip()
+        allowed = get_allowed_users()
+        uid_str = str(user_id)
+        if uid_str in allowed:
+            allowed[uid_str]["artist_name"] = artist_name
+            save_allowed_users(allowed)
+            
+        await message.reply_text(f"Artist name saved successfully: {artist_name}")
+        del user_states[user_id]
+        return
+
+    if getattr(message, "text", None) is None:
+        return
+        
     if step == "ASK_EPISODES":
         text = message.text.strip().lower()
         parts = text.replace("single", "").replace("multiple", "").strip().split()
