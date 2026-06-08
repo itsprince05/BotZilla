@@ -82,7 +82,7 @@
             });
             allowedUsers = [...new Set(allowedUsers)];
             
-            fetch('/api/shows/{{ show_name|urlencode }}/users', {
+            fetch('/api/shows/' + encodeURIComponent({{ show_name|tojson }}) + '/users', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(allowedUsers)
