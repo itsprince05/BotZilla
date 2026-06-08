@@ -36,7 +36,7 @@ def user_page(userid):
     
     return render_template('user_shows.html', userid=userid, name=name, allowed_shows=sorted(allowed_shows, key=lambda x: x.lower()), all_shows=sorted(list(shows.keys()), key=lambda x: x.lower()), set_cover=set_cover, set_artist=set_artist)
 
-@flask_app.route('/show/<name>')
+@flask_app.route('/show/<path:name>')
 def show_page(name):
     buyers = get_allowed_users()
     users = get_all_users()
@@ -81,15 +81,26 @@ def api_add_show():
     save_shows(shows)
     return jsonify({"success": True})
 
-@flask_app.route('/api/shows/<name>', methods=['DELETE'])
+@flask_app.route('/api/shows/<path:name>', methods=['DELETE'])
 def api_delete_show(name):
     shows = get_shows()
     if name in shows:
         del shows[name]
         save_shows(shows)
+        
+        buyers = get_allowed_users()
+        changed = False
+        for buyer_id, buyer_data in buyers.items():
+            if "allowed_shows" in buyer_data and name in buyer_data["allowed_shows"]:
+                buyer_data["allowed_shows"].remove(name)
+                changed = True
+        
+        if changed:
+            save_allowed_users(buyers)
+            
     return jsonify({"success": True})
 
-@flask_app.route('/api/shows/<name>/users', methods=['POST'])
+@flask_app.route('/api/shows/<path:name>/users', methods=['POST'])
 def api_update_show_users(name):
     allowed_users = request.json
     if allowed_users is None:
