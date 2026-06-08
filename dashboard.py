@@ -3,8 +3,10 @@ from flask import Flask, request, jsonify, render_template, send_file
 import logging
 from db import (
     get_shows, save_shows, get_allowed_users, save_allowed_users,
-    get_all_users, save_all_users, parse_keys_input
+    get_all_users, save_all_users, parse_keys_input, get_pocketfm_auth
 )
+import urllib.request
+import json
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -53,6 +55,83 @@ def show_page(name):
             
     filtered_buyers = dict(sorted(filtered_buyers.items(), key=lambda item: item[1].get("name", "").lower()))
     return render_template('show_users.html', show_name=name, buyers=filtered_buyers)
+
+@flask_app.route('/api/fetch_show_name', methods=['GET'])
+def api_fetch_show_name():
+    show_id = request.args.get('show_id')
+    if not show_id:
+        return jsonify({"success": False})
+        
+    auth = get_pocketfm_auth()
+    url = f"https://api.pocketfm.com/v2/content_api/show.get_details?show_id={show_id}&curr_ptr=0&info_level=full"
+    
+    def get_req(access_token):
+        return urllib.request.Request(url, headers={
+            "Host": "api.pocketfm.com",
+            "uid": auth.get("uid", ""),
+            "version-name": "9.1.3",
+            "platform-version": "29",
+            "app-version": "2013",
+            "authorization": f"Bearer {access_token}"
+        })
+    
+    try:
+        try:
+            resp = urllib.request.urlopen(get_req(auth.get('access_token', '')), timeout=10)
+            data = json.loads(resp.read())
+        except Exception as e:
+            if hasattr(e, 'read'):
+                try:
+                    data = json.loads(e.read())
+                except:
+                    data = {}
+            else:
+                raise e
+                
+        if data.get("code") == "TOKEN_EXPIRED":
+            refresh_url = "https://iam.pocketfm.com/v1/auth/refresh"
+            refresh_payload = json.dumps({"refresh_token": auth.get("refresh_token", "")}).encode('utf-8')
+            refresh_req = urllib.request.Request(refresh_url, data=refresh_payload, headers={
+                "Host": "iam.pocketfm.com",
+                "uid": auth.get("uid", ""),
+                "platform": "android",
+                "device-id": auth.get("device_id", ""),
+                "app-name": "pocket_fm",
+                "version-name": "9.1.3",
+                "platform-version": "29",
+                "app-version": "2013",
+                "Content-Type": "application/json"
+            }, method='POST')
+            
+            try:
+                r_resp = urllib.request.urlopen(refresh_req, timeout=10)
+                r_data = json.loads(r_resp.read())
+            except Exception as e:
+                if hasattr(e, 'read'):
+                    r_data = json.loads(e.read())
+                else:
+                    raise e
+                    
+            if "access_token" in r_data and "refresh_token" in r_data:
+                auth["access_token"] = r_data["access_token"]
+                auth["refresh_token"] = r_data["refresh_token"]
+                from db import save_pocketfm_auth
+                save_pocketfm_auth(auth)
+                
+                resp = urllib.request.urlopen(get_req(auth['access_token']), timeout=10)
+                data = json.loads(resp.read())
+            else:
+                return jsonify({"success": False, "error": "Failed to refresh token"})
+                
+        title = ""
+        result = data.get("result", [])
+        if result and isinstance(result, list):
+            title = result[0].get("show_title", "")
+        if title:
+            return jsonify({"success": True, "title": title})
+        return jsonify({"success": False})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 
 @flask_app.route('/api/shows', methods=['GET'])
 def api_get_shows():
