@@ -1328,11 +1328,8 @@ async def handle_text(client: Client, message: Message):
             return
             
         text = message.text.strip().lower()
-        if not (text.startswith("single") or text.startswith("multiple")):
-            await message.reply_text("Invalid episode number...\n\nSend episode number which you want to download...\n\nSingle 1\nMultiple 1 10")
-            return
-            
         parts = text.replace("single", "").replace("multiple", "").strip().split()
+        
         if not parts:
             await message.reply_text("Invalid episode number...\n\nSend episode number which you want to download...\n\nSingle 1\nMultiple 1 10")
             return
@@ -1466,4 +1463,4 @@ if __name__ == "__main__":
             pass
         # Notify owner about crash via raw API
         if OWNER_IDS:
-            _tg_raw_send(OWNER_IDS[0], f"Bot CRASHED!\n\n{str(e)[:500]}")
+            _tg_raw_send(OWNER_IDS[0], f"Bot CRASHED...\n\n{str(e)[:500]}")
