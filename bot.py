@@ -515,14 +515,16 @@ async def cmd_start(client: Client, message: Message):
         has_mp4decrypt = check_tool(MP4DECRYPT_PATH)
         await message.reply_text(
             "BotZilla Downloader\n\n"
-            "Commands\n"
+            "For Admins\n"
             "/dashboard Show Dashboard URL\n"
             "/allow Allow user\n"
             "/remove Remove user\n\n"
-            "Owner Only\n"
+            "For Owner Only\n"
             "/admin Add admin\n"
             "/radmin Remove admin\n"
-            "/update Pull and restart",
+            "/update Pull and restart\n"
+            "/backup Backup database\n"
+            "/restore Restore database",
             quote=False,
         )
     else:
@@ -1287,7 +1289,7 @@ async def drm_start(client: Client, message: Message):
     )
 
 
-@app.on_message((filters.text | filters.photo) & ~filters.command(["start", "status", "cancel", "stop", "update", "drm", "show_list", "allow", "remove", "dash", "dashboard", "set_cover", "set_artist"]))
+@app.on_message((filters.text | filters.photo) & ~filters.command(["start", "status", "cancel", "stop", "update", "drm", "show_list", "allow", "remove", "dash", "dashboard", "set_cover", "set_artist", "running", "backup", "restore"]))
 @authorized_only
 async def handle_text(client: Client, message: Message):
     user_id = message.from_user.id
