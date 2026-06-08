@@ -1142,7 +1142,7 @@ async def run_batch_download(client, chat_id, user_id, show_id, mode, episodes):
         for ep_num in range(start_ep, end_ep + 1):
             active_downloads[user_id] = {"show_name": show_name, "remaining": (end_ep - ep_num + 1)}
             if not download_flags.get(user_id):
-                await client.send_message(chat_id, "Stopped")
+                await client.send_message(chat_id, "Stopped and cleared...")
                 download_flags[user_id] = False
                 return
                 
@@ -1298,6 +1298,8 @@ async def handle_text(client: Client, message: Message):
     step = state.get("step")
     
     if step == "ASK_COVER":
+        if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
+            return
         if not message.photo:
             await message.reply_text("Please send a valid photo for the cover.")
             return
@@ -1312,6 +1314,8 @@ async def handle_text(client: Client, message: Message):
         return
         
     if step == "ASK_ARTIST":
+        if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
+            return
         if not message.text:
             await message.reply_text("Please send a valid text for the artist name.")
             return
@@ -1331,7 +1335,14 @@ async def handle_text(client: Client, message: Message):
         return
         
     if step == "ASK_EPISODES":
+        if message.chat.type in [ChatType.GROUP, ChatType.SUPERGROUP]:
+            return
+            
         text = message.text.strip().lower()
+        if not (text.startswith("single") or text.startswith("multiple")):
+            await message.reply_text("Invalid episode number...\n\nSend episode number which you want to download...\n\nSingle 1\nMultiple 1 10")
+            return
+            
         parts = text.replace("single", "").replace("multiple", "").strip().split()
         if not parts:
             await message.reply_text("Invalid episode number...\n\nSend episode number which you want to download...\n\nSingle 1\nMultiple 1 10")
@@ -1592,6 +1603,79 @@ async def handle_callback(client: Client, query):
             await process_drm(client, query.message, state)
         else:
             await query.answer("Show not found in dashboard!", show_alert=True)
+
+@app.on_message(filters.command("backup"))
+@authorized_only
+async def cmd_backup(client: Client, message: Message):
+    user_id = message.from_user.id
+    if not OWNER_IDS or user_id not in OWNER_IDS:
+        return
+        
+    status_msg = await message.reply_text("Creating backup files...", quote=True)
+    
+    zip_filename = f"{int(time.time())}.zip"
+    zip_path = os.path.join(BOT_DIR, zip_filename)
+    try:
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, _, files in os.walk(BOT_DIR):
+                if root != BOT_DIR:
+                    continue
+                for file in files:
+                    if file.endswith('.json'):
+                        zipf.write(os.path.join(root, file), file)
+                        
+            covers_dir = os.path.join(BOT_DIR, "covers")
+            if os.path.exists(covers_dir):
+                for file in os.listdir(covers_dir):
+                    if file.endswith('.jpg'):
+                        zipf.write(os.path.join(covers_dir, file), os.path.join("covers", file))
+                        
+            avatars_dir = os.path.join(BOT_DIR, "avatars")
+            if os.path.exists(avatars_dir):
+                for file in os.listdir(avatars_dir):
+                    if file.endswith('.jpg'):
+                        zipf.write(os.path.join(avatars_dir, file), os.path.join("avatars", file))
+
+        await client.send_document(chat_id=message.chat.id, document=zip_path)
+        await status_msg.delete()
+    except Exception as e:
+        await status_msg.edit_text(f"Backup failed: {e}")
+    finally:
+        if os.path.exists(zip_path):
+            try:
+                os.remove(zip_path)
+            except:
+                pass
+
+@app.on_message(filters.command("restore"))
+@authorized_only
+async def cmd_restore(client: Client, message: Message):
+    user_id = message.from_user.id
+    if not OWNER_IDS or user_id not in OWNER_IDS:
+        return
+        
+    if not message.reply_to_message or not message.reply_to_message.document:
+        await message.reply_text("Please reply with the ZIP backup file for restoration...", quote=True)
+        return
+        
+    status_msg = await message.reply_text("Restoring data...", quote=True)
+    
+    zip_path = os.path.join(BOT_DIR, "restore_temp.zip")
+    try:
+        await client.download_media(message.reply_to_message, file_name=zip_path)
+        
+        with zipfile.ZipFile(zip_path, 'r') as zipf:
+            zipf.extractall(BOT_DIR)
+            
+        await status_msg.edit_text("Data restored successfully...")
+    except Exception as e:
+        await status_msg.edit_text(f"Restore failed: {e}")
+    finally:
+        if os.path.exists(zip_path):
+            try:
+                os.remove(zip_path)
+            except:
+                pass
 
 if __name__ == "__main__":
     try:
