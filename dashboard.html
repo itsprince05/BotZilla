@@ -76,7 +76,12 @@
             <div class="card">
                 <h3>Add New Show</h3>
                 <form id="addShowForm" style="display: flex; flex-direction: column; gap: 10px;">
-                    <textarea id="showName" rows="1" required placeholder="Show Name" style="resize: none; overflow-y: auto; max-height: 90px; box-sizing: border-box;" oninput="this.style.height = 'auto'; this.style.height = Math.min(this.scrollHeight, 90) + 'px'"></textarea>
+                    <div style="position: relative; display: flex; align-items: center;">
+                        <textarea id="showName" rows="1" required placeholder="Show Name" style="resize: none; overflow-y: auto; max-height: 90px; box-sizing: border-box; background-color: #f5f5f5; cursor: not-allowed; padding-right: 40px; width: 100%;" readonly></textarea>
+                        <div id="showNameLoader" style="display: none; position: absolute; right: 10px; top: 50%; transform: translateY(-50%);">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2481cc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-loader-icon lucide-loader"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg>
+                        </div>
+                    </div>
                     <input type="text" id="showId" placeholder="Show ID" required>
                     <textarea id="decryptionKey" rows="4" required placeholder="Decryption Keys" style="resize: none;"></textarea>
                     <button type="submit" class="primary-btn">Save Show</button>
@@ -242,6 +247,40 @@
             }
             fetch('/api/buyers/' + uid + '/toggle', { method: 'POST' }).then(() => loadBuyers());
         }
+
+        let fetchShowTimeout = null;
+        document.getElementById('showId').addEventListener('input', (e) => {
+            const showId = e.target.value.trim();
+            const showNameInput = document.getElementById('showName');
+            const loader = document.getElementById('showNameLoader');
+            
+            showNameInput.value = '';
+            showNameInput.style.height = 'auto';
+            
+            if (fetchShowTimeout) clearTimeout(fetchShowTimeout);
+            
+            if (!showId) {
+                loader.style.display = 'none';
+                return;
+            }
+            
+            loader.style.display = 'block';
+            fetchShowTimeout = setTimeout(() => {
+                fetch('/api/fetch_show_name?show_id=' + encodeURIComponent(showId))
+                    .then(r => r.json())
+                    .then(res => {
+                        if (res.success && res.title) {
+                            showNameInput.value = res.title;
+                            showNameInput.style.height = 'auto';
+                            showNameInput.style.height = Math.min(showNameInput.scrollHeight, 90) + 'px';
+                        }
+                    })
+                    .catch(err => console.error(err))
+                    .finally(() => {
+                        loader.style.display = 'none';
+                    });
+            }, 600);
+        });
 
         document.getElementById('addShowForm').addEventListener('submit', (e) => {
             e.preventDefault();
