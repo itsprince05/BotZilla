@@ -619,8 +619,12 @@ def get_buyer_saved_shows(userid):
         FROM user_saves us 
         LEFT JOIN stories s ON us.show_id = s.show_id 
         WHERE us.user_id = ?
+        ORDER BY s.title ASC
     ''', (userid,))
     shows = [{"id": r[0], "title": r[1] or r[0]} for r in db.cursor.fetchall()]
+    
+    # Sort in python as well to handle missing titles using show_id
+    shows.sort(key=lambda x: str(x['title']).lower())
     return jsonify(shows)
 
 @flask_app.route('/api/users', methods=['GET'])
