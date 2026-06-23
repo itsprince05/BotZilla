@@ -310,6 +310,8 @@ async def update_cmd(client, message):
     
     m = await message.reply("Pulling updates from GitHub...")
     try:
+        # Save local changes to prevent merge conflicts
+        subprocess.run(["git", "stash"], capture_output=True)
         # Run git pull
         result = subprocess.run(["git", "pull"], capture_output=True, text=True, check=True)
         
