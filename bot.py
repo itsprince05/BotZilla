@@ -29,10 +29,23 @@ from helpers import (
 
 from pfm_downloader import PFMDownloader
 
-def get_user_info_level(uid):
+def get_user_info_level(uid, show_id=None):
     """Returns 'full' if user has extra_episode enabled, else 'max'"""
+    if show_id:
+        db.cursor.execute('SELECT 1 FROM subscriptions WHERE user_id = ? AND sub_type = "extra_ep_remove_story" AND sub_data = ?', (uid, show_id))
+        if db.cursor.fetchone():
+            return 'max'
+            
     db.cursor.execute('SELECT 1 FROM subscriptions WHERE user_id = ? AND sub_type = "extra_episode"', (uid,))
-    return 'full' if db.cursor.fetchone() else 'max'
+    if db.cursor.fetchone():
+        return 'full'
+        
+    if show_id:
+        db.cursor.execute('SELECT 1 FROM subscriptions WHERE user_id = ? AND sub_type = "extra_ep_story" AND sub_data = ?', (uid, show_id))
+        if db.cursor.fetchone():
+            return 'full'
+            
+    return 'max'
 
 logging.basicConfig(
     level=logging.INFO,
