@@ -830,7 +830,7 @@ async def handle_messages(client, message):
         if not status_msg:
             status_msg = await message.reply("Getting show details...")
         
-        user_info_level = get_user_info_level(uid)
+        user_info_level = get_user_info_level(uid, show_id)
         show_info = await downloader.get_show_info(show_id, info_level=user_info_level)
         if not show_info:
             return await status_msg.edit("Failed to get show details...\n\nPlease check the link and try again...")
@@ -907,7 +907,7 @@ async def handle_messages(client, message):
         start_seq, end_seq = min(episodes), max(episodes)
         
         try:
-            show_info = await downloader.get_show_info(show_id, info_level=get_user_info_level(uid))
+            show_info = await downloader.get_show_info(show_id, info_level=get_user_info_level(uid, show_id))
             if show_info and 'total_episodes' in show_info:
                 if end_seq > show_info['total_episodes']:
                     user_awaiting_range[chat_id] = True
@@ -966,7 +966,7 @@ async def handle_messages(client, message):
                 
                 # Log the request
                 try:
-                    show_info_for_log = await downloader.get_show_info(t_show_id, info_level=get_user_info_level(uid))
+                    show_info_for_log = await downloader.get_show_info(t_show_id, info_level=get_user_info_level(uid, t_show_id))
                     if show_info_for_log:
                         story_title = show_info_for_log.get('title', 'Unknown Story')
                         image_url = show_info_for_log.get('image')
@@ -1162,7 +1162,7 @@ async def handle_messages(client, message):
                         t_show_id, min(t_episodes), max(t_episodes), Config.DOWNLOAD_DIR,
                         progress_callback=discovery_callback, cancel_flag=lambda: cancel_flags.get(uid),
                         on_complete=download_complete_callback, on_start=start_download_callback,
-                        discovery_done=discovery_done_event, info_level=get_user_info_level(uid)
+                        discovery_done=discovery_done_event, info_level=get_user_info_level(uid, t_show_id)
                     )
                     
                     await upload_queue.put(None)
@@ -1232,7 +1232,7 @@ async def show_callback(client, callback_query):
     await callback_query.message.delete()
     status_msg = await client.send_message(chat_id, "Getting show details...")
     
-    show_info = await downloader.get_show_info(show_id, info_level=get_user_info_level(callback_query.from_user.id))
+    show_info = await downloader.get_show_info(show_id, info_level=get_user_info_level(callback_query.from_user.id, show_id))
     if not show_info:
         return await status_msg.edit("Failed to get show details...\n\nPlease check the link and try again...")
     
@@ -1286,7 +1286,7 @@ async def all_callback(client, callback_query):
         pass
     await callback_query.answer()
     
-    show_info = await downloader.get_show_info(show_id, info_level=get_user_info_level(callback_query.from_user.id))
+    show_info = await downloader.get_show_info(show_id, info_level=get_user_info_level(callback_query.from_user.id, show_id))
     if not show_info:
         return
     total = show_info.get("total_episodes", 1)
