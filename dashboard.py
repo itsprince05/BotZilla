@@ -29,8 +29,7 @@ def update_password():
 def login():
     if request.method == 'POST':
         if request.is_json:
-            data = request.get_json(silent=True) or {}
-            pwd = data.get('password')
+            pwd = request.json.get('password')
         else:
             pwd = request.form.get('password')
             
