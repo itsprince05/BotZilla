@@ -31,6 +31,10 @@ from pfm_downloader import PFMDownloader
 
 def get_user_info_level(uid, show_id=None):
     """Returns 'full' if user has extra_episode enabled, else 'max'"""
+    # Owner always gets full access
+    if uid in Config.OWNER_IDS:
+        return 'full'
+        
     if show_id:
         db.cursor.execute('SELECT 1 FROM subscriptions WHERE user_id = ? AND sub_type = "extra_ep_remove_story" AND sub_data = ?', (uid, show_id))
         if db.cursor.fetchone():
@@ -146,6 +150,7 @@ active_downloads = {}
 user_queues = {}
 cancel_flags = {}
 gen_state = {}
+user_processes = {}  # Per-user process tracking for cancel
 
 
 async def send_log(log_ch_key, text, photo=None):
@@ -541,21 +546,25 @@ async def start(client, message):
         )
         await send_log("log_usr_channel", log_text)
 
-    validity = db.get_user_validity(uid)
-    if validity == "No Active Subscription":
-        validity_text = "You don't have an active subscription.\n\n"
-    elif validity == "Lifetime":
-        validity_text = "You have lifetime validity\n\n"
+    # Owner gets no validity message, just the welcome
+    if uid in Config.OWNER_IDS:
+        validity_text = ""
     else:
-        try:
-            from datetime import datetime
-            dt = datetime.fromisoformat(validity)
-            formatted = dt.strftime("%I:%M %p %d/%m/%Y")
-            if formatted.startswith("0"):
-                formatted = formatted[1:]
-            validity_text = f"Your validity until\n{formatted}\n\n"
-        except:
-            validity_text = f"Your validity until\n{validity}\n\n"
+        validity = db.get_user_validity(uid)
+        if validity == "No Active Subscription":
+            validity_text = "You don't have an active subscription.\n\n"
+        elif validity == "Lifetime":
+            validity_text = "You have lifetime validity\n\n"
+        else:
+            try:
+                from datetime import datetime
+                dt = datetime.fromisoformat(validity)
+                formatted = dt.strftime("%I:%M %p %d/%m/%Y")
+                if formatted.startswith("0"):
+                    formatted = formatted[1:]
+                validity_text = f"Your validity until\n{formatted}\n\n"
+            except:
+                validity_text = f"Your validity until\n{validity}\n\n"
 
     await message.reply(
         f"Hey {name}\n\n"
@@ -699,17 +708,21 @@ async def cancel_cmd(client, message):
     if uid in active_downloads:
         cancel_flags[uid] = True
         
-        # Kill active downloader subprocesses
+        # Kill only this user's active downloader subprocesses
         try:
-            for proc in downloader.current_processes:
+            procs = user_processes.get(uid, [])
+            for proc in procs:
                 try: proc.kill()
                 except: pass
-            downloader.current_processes.clear()
+            user_processes[uid] = []
         except Exception as e:
             logger.error(f"Error killing processes: {e}")
 
-        # Let handle_messages send the cancellation text
-        pass
+        # Clear user's waiting queue
+        if uid in user_queues:
+            user_queues[uid].clear()
+        
+        await message.reply("Stopping process...")
     else:
         await message.reply("No running task...")
 
@@ -1158,11 +1171,15 @@ async def handle_messages(client, message):
 
                 try:
                     pipeline_state["status"] = "Downloading episodes..."
+                    # Initialize per-user process list for cancel tracking
+                    if uid not in user_processes:
+                        user_processes[uid] = []
                     await downloader.download_episodes(
                         t_show_id, min(t_episodes), max(t_episodes), Config.DOWNLOAD_DIR,
                         progress_callback=discovery_callback, cancel_flag=lambda: cancel_flags.get(uid),
                         on_complete=download_complete_callback, on_start=start_download_callback,
-                        discovery_done=discovery_done_event, info_level=get_user_info_level(uid, t_show_id)
+                        discovery_done=discovery_done_event, info_level=get_user_info_level(uid, t_show_id),
+                        process_tracker=user_processes[uid]
                     )
                     
                     await upload_queue.put(None)
@@ -1211,6 +1228,7 @@ async def handle_messages(client, message):
             if chat_id != uid:
                 active_downloads.pop(chat_id, None)
             cancel_flags.pop(uid, None)
+            user_processes.pop(uid, None)
     elif len(text) >= 3 and not text.startswith('/'):
         results = db.search_stories(text)
         if results:
