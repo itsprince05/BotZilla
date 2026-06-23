@@ -372,7 +372,7 @@ async def dashboard_cmd(client, message):
         pwd = dashboard.update_password()
         await m.edit(f"Dashboard URL...\n\n`{pwd}`\n\n{tunnel_url}")
     else:
-        await m.edit("Failed to generate a new URL. Try again later.")
+        await m.edit("Failed to generate a new URL. Try again later...")
 
 @app.on_message(filters.command("backup") & ~filters.bot)
 async def backup_cmd(client, message):
