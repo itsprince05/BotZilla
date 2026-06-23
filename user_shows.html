@@ -831,41 +831,11 @@
         window.openDropdowns = new Set();
         function toggleCustomDropdown(showId) {
             const isCurrentlyOpen = window.openDropdowns.has(showId);
-
-            window.openDropdowns.forEach(id => {
-                const c = document.getElementById('dropdown-' + id);
-                const i = document.getElementById('icon-' + id);
-                const card = document.getElementById('card-' + id);
-                if (c) c.style.display = 'none';
-                if (i) i.style.transform = 'rotate(0deg)';
-                if (card) {
-                    card.style.background = '#ffffff';
-                    card.style.margin = '0';
-                    card.style.borderRadius = '0';
-                    card.style.boxShadow = 'none';
-                    card.style.border = 'none';
-                    card.style.borderBottom = '1px solid #eee';
-                    card.style.borderLeft = card.dataset.indicator;
-                }
-            });
             window.openDropdowns.clear();
-
             if (!isCurrentlyOpen) {
-                const c = document.getElementById('dropdown-' + showId);
-                const i = document.getElementById('icon-' + showId);
-                const card = document.getElementById('card-' + showId);
-                if (c) c.style.display = 'block';
-                if (i) i.style.transform = 'rotate(180deg)';
-                if (card) {
-                    card.style.background = '#f8fafd';
-                    card.style.margin = '5px 0';
-                    card.style.borderRadius = '8px';
-                    card.style.boxShadow = '0 2px 8px rgba(0,0,0,0.05)';
-                    card.style.border = '1px solid #e1e8ed';
-                    card.style.borderLeft = card.dataset.indicator;
-                }
                 window.openDropdowns.add(showId);
             }
+            renderCustomShows();
         }
 
         function setExtraEpCustom(showId, checkboxElement) {
@@ -879,79 +849,119 @@
             });
         }
 
+        function renderCustomShows() {
+            const rules = window.customRules || [];
+            const list = document.getElementById('custom-shows-list');
+            if (rules.length === 0) {
+                list.style.display = 'none';
+                list.innerHTML = '';
+                return;
+            }
+            
+            list.style.display = 'flex';
+            list.style.background = 'transparent';
+            list.style.border = 'none';
+            list.style.boxShadow = 'none';
+            list.style.overflow = 'visible';
+            
+            let html = '';
+            rules.forEach((rule, index) => {
+                const isAllow = rule.type === 'allow';
+                const isDropdownOpen = window.openDropdowns.has(rule.show_id);
+                const prevOpen = index > 0 && window.openDropdowns.has(rules[index-1].show_id);
+                const nextOpen = index < rules.length - 1 && window.openDropdowns.has(rules[index+1].show_id);
+                
+                const isFirst = index === 0;
+                const isLast = index === rules.length - 1;
+                
+                const blockText = !isAllow ? `<span style="color: #fa5252; font-size: 11px; font-weight: 600;">Blocked Story</span>` : '';
+                const extraEpText = rule.extra_ep ? `<span style="color: #2b8a3e; font-size: 11px; font-weight: 600;">Extra Episodes Allowed</span>` : `<span style="color: #fa5252; font-size: 11px; font-weight: 600;">Extra Episode Not Allowed</span>`;
+                const labelsHtml = `
+                    <div style="display: flex; gap: 6px; margin-top: 2px; flex-wrap: wrap; align-items: center;">
+                        ${blockText}
+                        ${blockText && extraEpText ? '<span style="color: #ccc; font-size: 10px;">|</span>' : ''}
+                        ${extraEpText}
+                    </div>
+                `;
+
+                const nextAction = isAllow ? 'block' : 'allow';
+                const nextActionLabel = isAllow ? 'Block' : 'Allow';
+                const allowBlockColor = isAllow ? '#fa5252' : '#2481cc';
+                
+                const indicatorColor = isAllow ? '#2b8a3e' : '#fa5252';
+                
+                // Margin logic
+                let margin = '0';
+                if (isDropdownOpen) {
+                    if (isFirst && isLast) margin = '0';
+                    else if (isFirst) margin = '0 0 5px 0';
+                    else if (isLast) margin = '5px 0 0 0';
+                    else margin = '5px 0';
+                }
+                
+                // Radius logic
+                let radiusTop = '0';
+                let radiusBottom = '0';
+                
+                if (isDropdownOpen || isFirst || prevOpen) radiusTop = '10px';
+                if (isDropdownOpen || isLast || nextOpen) radiusBottom = '10px';
+                
+                const cardRadius = `border-radius: ${radiusTop} ${radiusTop} ${radiusBottom} ${radiusBottom};`;
+                
+                // Border logic
+                const borderRight = '1px solid #e0e0e0';
+                const borderLeft = `4px solid ${indicatorColor}`;
+                let borderTop = (isFirst || isDropdownOpen || prevOpen) ? '1px solid #e0e0e0' : 'none';
+                let borderBottom = (isLast || isDropdownOpen || nextOpen) ? '1px solid #e0e0e0' : '1px solid #eee';
+                
+                // Background & Shadow
+                const cardBg = '#ffffff';
+                const cardShadow = isDropdownOpen ? 'box-shadow: 0 4px 12px rgba(0,0,0,0.05); z-index: 10; position: relative;' : 'box-shadow: none; z-index: 1; position: relative;';
+                
+                const iconTransform = isDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)';
+                const dropdownDisplay = isDropdownOpen ? 'block' : 'none';
+
+                html += `
+                <div id="card-${rule.show_id}" class="list-card" style="background: ${cardBg}; margin: ${margin}; ${cardRadius} ${cardShadow} border-top: ${borderTop}; border-bottom: ${borderBottom}; border-right: ${borderRight}; border-left: ${borderLeft}; padding: 12px; display: flex; flex-direction: column; text-align: left; align-items: stretch; transition: margin 0.2s, border-radius 0.2s, box-shadow 0.2s; box-sizing: border-box;">
+                    <div style="display: flex; align-items: flex-start; justify-content: space-between; text-align: left; cursor: pointer;" onclick="toggleCustomDropdown('${rule.show_id}')">
+                        <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding-right: 10px; text-align: left;">
+                            <div class="list-title" style="white-space: normal; word-break: break-word; font-weight: 600; line-height: 1.3; text-align: left;">${rule.title}</div>
+                            ${labelsHtml}
+                        </div>
+                        <div style="flex-shrink:0; display:flex; align-items:center; justify-content:center; width: 32px; height: 32px; background: transparent;">
+                            <svg style="transition: transform 0.2s; transform: ${iconTransform};" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1c1e21" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                        </div>
+                    </div>
+                    <div style="display: ${dropdownDisplay}; margin-top: 12px; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 12px;">
+                        <div style="display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: nowrap;">
+                            <label style="cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1; margin: 0; background: transparent; padding: 8px 0; border-radius: 6px; color: #1c1e21;">
+                                <input type="checkbox" class="checkbox" ${rule.extra_ep ? 'checked' : ''} onchange="setExtraEpCustom('${rule.show_id}', this)">
+                                <div class="custom-checkbox" style="width: 18px; height: 18px;">
+                                    <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+                                    <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
+                                </div>
+                                <span style="font-size: 13px; font-weight: 600; white-space: nowrap;">Extra Episode</span>
+                            </label>
+                            
+                            <button onclick="toggleCustomRule('${rule.show_id}', '${nextAction}', this)" style="flex: 1; padding: 8px 0; border: none; border-radius: 6px; background: ${allowBlockColor}; color: white; font-weight: 600; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 13px; margin: 0; white-space: nowrap;">
+                                ${nextActionLabel}
+                            </button>
+                            <button onclick="showDeletePopup('${rule.show_id}', '${rule.title.replace(/'/g, "\\'")}')" style="flex: 1; padding: 8px 0; border: none; border-radius: 6px; background: #ffe3e3; color: #e03131; font-weight: 600; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 13px; margin: 0; white-space: nowrap;">
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            list.innerHTML = html;
+        }
+
         function loadCustomShows() {
             fetch('/api/buyers/{{ userid }}/custom_rules')
                 .then(r => r.json())
                 .then(rules => {
-                    const list = document.getElementById('custom-shows-list');
-                    if (rules.length === 0) {
-                        list.style.display = 'none';
-                        list.innerHTML = '';
-                    } else {
-                        list.style.display = 'flex';
-                        let html = '';
-                        rules.forEach(rule => {
-                            const isAllow = rule.type === 'allow';
-                            const blockText = !isAllow ? `<span style="color: #fa5252; font-size: 11px; font-weight: 600;">Blocked Story</span>` : '';
-                            const extraEpText = rule.extra_ep ? `<span style="color: #2b8a3e; font-size: 11px; font-weight: 600;">Extra Episodes Allowed</span>` : `<span style="color: #fa5252; font-size: 11px; font-weight: 600;">Extra Episode Not Allowed</span>`;
-                            const labelsHtml = `
-                                <div style="display: flex; gap: 6px; margin-top: 2px; flex-wrap: wrap; align-items: center;">
-                                    ${blockText}
-                                    ${blockText && extraEpText ? '<span style="color: #ccc; font-size: 10px;">|</span>' : ''}
-                                    ${extraEpText}
-                                </div>
-                            `;
-
-                            const nextAction = isAllow ? 'block' : 'allow';
-                            const nextActionLabel = isAllow ? 'Block Story' : 'Allow Story';
-
-                            const isDropdownOpen = window.openDropdowns && window.openDropdowns.has(rule.show_id);
-                            const dropdownDisplay = isDropdownOpen ? 'block' : 'none';
-                            const iconTransform = isDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)';
-
-                            const indicatorBorder = `4px solid ${isAllow ? '#2b8a3e' : '#fa5252'}`;
-                            const cardBg = isDropdownOpen ? '#f8fafd' : '#ffffff';
-                            const cardMargin = isDropdownOpen ? 'margin: 5px 0;' : 'margin: 0;';
-                            const cardRadius = isDropdownOpen ? 'border-radius: 8px;' : 'border-radius: 0;';
-                            const cardShadow = isDropdownOpen ? 'box-shadow: 0 2px 8px rgba(0,0,0,0.05);' : 'box-shadow: none;';
-                            const cardBorder = isDropdownOpen ? 'border: 1px solid #e1e8ed;' : 'border-bottom: 1px solid #eee; border-top: none; border-right: none;';
-
-                            const allowBlockColor = isAllow ? '#fa5252' : '#2481cc';
-
-                            html += `
-                            <div id="card-${rule.show_id}" data-indicator="${indicatorBorder}" class="list-card" style="background: ${cardBg}; ${cardMargin} ${cardRadius} ${cardShadow} ${cardBorder} border-left: ${indicatorBorder}; padding: 12px; display: flex; flex-direction: column; text-align: left; align-items: stretch; transition: all 0.2s;">
-                                <div style="display: flex; align-items: flex-start; justify-content: space-between; text-align: left; cursor: pointer;" onclick="toggleCustomDropdown('${rule.show_id}')">
-                                    <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding-right: 10px; text-align: left;">
-                                        <div class="list-title" style="white-space: normal; word-break: break-word; font-weight: 600; line-height: 1.3; text-align: left;">${rule.title}</div>
-                                        ${labelsHtml}
-                                    </div>
-                                    <div style="flex-shrink:0; display:flex; align-items:center; justify-content:center; width: 32px; height: 32px; background: transparent;">
-                                        <svg id="icon-${rule.show_id}" style="transition: transform 0.2s; transform: ${iconTransform};" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1c1e21" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down"><path d="m6 9 6 6 6-6"/></svg>
-                                    </div>
-                                </div>
-                                <div id="dropdown-${rule.show_id}" style="display: ${dropdownDisplay}; margin-top: 12px; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 12px;">
-                                    <div style="display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: nowrap;">
-                                        <label style="cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1; margin: 0; background: transparent; padding: 8px 0; border-radius: 6px; color: #1c1e21;">
-                                            <input type="checkbox" class="checkbox" ${rule.extra_ep ? 'checked' : ''} onchange="setExtraEpCustom('${rule.show_id}', this)">
-                                            <div class="custom-checkbox" style="width: 18px; height: 18px;">
-                                                <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-                                                <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
-                                            </div>
-                                            <span style="font-size: 13px; font-weight: 600; white-space: nowrap;">Extra Episode</span>
-                                        </label>
-                                        
-                                        <button onclick="toggleCustomRule('${rule.show_id}', '${nextAction}', this)" style="flex: 1; padding: 8px 0; border: none; border-radius: 6px; background: ${allowBlockColor}; color: white; font-weight: 600; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 13px; margin: 0; white-space: nowrap;">
-                                            ${nextActionLabel}
-                                        </button>
-                                        <button onclick="showDeletePopup('${rule.show_id}', '${rule.title.replace(/'/g, "\\'")}')" style="flex: 1; padding: 8px 0; border: none; border-radius: 6px; background: #ffe3e3; color: #e03131; font-weight: 600; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 13px; margin: 0; white-space: nowrap;">
-                                            Delete
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>`;
-                        });
-                        list.innerHTML = html;
-                    }
+                    window.customRules = rules;
+                    renderCustomShows();
                 });
         }
 
