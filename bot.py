@@ -370,7 +370,7 @@ async def dashboard_cmd(client, message):
         
     if tunnel_url:
         pwd = dashboard.update_password()
-        await m.edit(f"Dashboard URL...\n\n{pwd}\n\n{tunnel_url}")
+        await m.edit(f"Dashboard URL...\n\n`{pwd}`\n\n{tunnel_url}")
     else:
         await m.edit("Failed to generate a new URL. Try again later.")
 
@@ -1311,7 +1311,7 @@ async def main():
             await asyncio.sleep(0.5)
             
         if tunnel_url:
-            await restart_msg.edit(f"Bot is running and updated successfully...\n\nDashboard URL...\n\n{dashboard.DASHBOARD_PASSWORD}\n\n{tunnel_url}")
+            await restart_msg.edit(f"Bot is running and updated successfully...\n\nDashboard URL...\n\n`{dashboard.DASHBOARD_PASSWORD}`\n\n{tunnel_url}")
             
     # Start auto delete task in background
     asyncio.create_task(auto_delete_task())
