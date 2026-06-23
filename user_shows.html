@@ -17,6 +17,10 @@
             user-select: none;
         }
 
+        * {
+            -webkit-tap-highlight-color: transparent;
+        }
+
         .action-bar {
             position: sticky;
             top: 0;
@@ -361,7 +365,7 @@
                         <!-- First Cell: Custom Story -->
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
-                                <input type="checkbox" id="cb_custom_story" class="checkbox">
+                                <input type="checkbox" id="cb_custom_story" class="checkbox" {% if custom_story %}checked{% endif %}>
                                 <div class="custom-checkbox">
                                     <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24"
                                         height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
