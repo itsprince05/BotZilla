@@ -155,42 +155,31 @@
                     
                     <!-- Language Grid -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        {% set langs = [
-                            ("Hindi", "English"),
-                            ("Tamil", "Telugu"),
-                            ("Kannada", "Bengali"),
-                            ("Malayalam", "French"),
-                            ("Spanish", "German"),
-                            ("Portuguese", "")
-                        ] %}
-                        
-                        {% for lang1, lang2 in langs %}
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
-                                    <input type="checkbox" id="cb_lang_{{ lang1 }}" class="checkbox lang-checkbox" value="{{ lang1 }}" {% if lang1 in allowed_langs %}checked{% endif %}>
-                                    <div class="custom-checkbox">
-                                        <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-                                        <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
-                                    </div>
-                                </label>
-                                <label for="cb_lang_{{ lang1 }}" style="font-size: 15px; font-weight: 500; cursor: pointer;">{{ lang1 }}</label>
+                    <!-- First Cell: Custom Story -->
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
+                            <input type="checkbox" id="cb_custom_story" class="checkbox">
+                            <div class="custom-checkbox">
+                                <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+                                <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
                             </div>
-                            
-                            {% if lang2 %}
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
-                                    <input type="checkbox" id="cb_lang_{{ lang2 }}" class="checkbox lang-checkbox" value="{{ lang2 }}" {% if lang2 in allowed_langs %}checked{% endif %}>
-                                    <div class="custom-checkbox">
-                                        <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-                                        <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
-                                    </div>
-                                </label>
-                                <label for="cb_lang_{{ lang2 }}" style="font-size: 15px; font-weight: 500; cursor: pointer;">{{ lang2 }}</label>
-                            </div>
-                            {% else %}
-                            <div></div> <!-- Empty column for Portuguese row -->
-                            {% endif %}
-                        {% endfor %}
+                        </label>
+                        <label for="cb_custom_story" style="font-size: 15px; font-weight: 600; cursor: pointer;">Custom Story</label>
+                    </div>
+
+                    {% set all_langs = ["Hindi", "English", "Tamil", "Telugu", "Kannada", "Bengali", "Malayalam", "French", "Spanish", "German", "Portuguese"] %}
+                    {% for lang in all_langs %}
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
+                                <input type="checkbox" id="cb_lang_{{ lang }}" class="checkbox lang-checkbox" value="{{ lang }}" {% if lang in allowed_langs %}checked{% endif %}>
+                                <div class="custom-checkbox">
+                                    <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+                                    <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
+                                </div>
+                            </label>
+                            <label for="cb_lang_{{ lang }}" style="font-size: 15px; font-weight: 500; cursor: pointer;">{{ lang }}</label>
+                        </div>
+                    {% endfor %}
                     </div>
                 </div>
             </div>
@@ -570,6 +559,7 @@
                     document.getElementById('userNameInput').value = info.name;
                     document.getElementById('cb_all_stories').checked = info.has_all;
                     document.getElementById('cb_extra_episode').checked = info.extra_episode;
+                    document.getElementById('cb_custom_story').checked = info.custom_story;
                     
                     document.querySelectorAll('.lang-checkbox').forEach(cb => {
                         cb.checked = info.allowed_langs.includes(cb.value);
@@ -682,6 +672,7 @@
             initialState.userName = document.getElementById('userNameInput').value;
             initialState.allStories = document.getElementById('cb_all_stories').checked;
             initialState.extraEpisode = document.getElementById('cb_extra_episode').checked;
+            initialState.customStory = document.getElementById('cb_custom_story').checked;
             initialState.langs = Array.from(document.querySelectorAll('.lang-checkbox')).map(cb => cb.checked);
             initialState.duration = document.querySelector('input[name="durationRadio"]:checked') ? document.querySelector('input[name="durationRadio"]:checked').value : null;
             initialState.customDays = document.getElementById('customDaysInput').value;
@@ -712,10 +703,12 @@
             if (activeTab === 'allowed-shows-tab') {
                 const currentAllStories = document.getElementById('cb_all_stories').checked;
                 const currentExtraEpisode = document.getElementById('cb_extra_episode').checked;
+                const currentCustomStory = document.getElementById('cb_custom_story').checked;
                 const currentLangs = Array.from(document.querySelectorAll('.lang-checkbox')).map(cb => cb.checked);
                 
                 if (currentAllStories !== initialState.allStories) hasChanges = true;
                 if (currentExtraEpisode !== initialState.extraEpisode) hasChanges = true;
+                if (currentCustomStory !== initialState.customStory) hasChanges = true;
                 for (let i = 0; i < currentLangs.length; i++) {
                     if (currentLangs[i] !== initialState.langs[i]) {
                         hasChanges = true;
@@ -764,23 +757,39 @@
             });
 
             const allCb = document.getElementById('cb_all_stories');
+            const customStoryCb = document.getElementById('cb_custom_story');
             const langCbs = document.querySelectorAll('.lang-checkbox');
 
             allCb.addEventListener('change', (e) => {
-                const isChecked = e.target.checked;
-                langCbs.forEach(cb => {
-                    cb.checked = isChecked;
-                });
+                if (e.target.checked) {
+                    langCbs.forEach(cb => cb.checked = true);
+                    customStoryCb.checked = false;
+                } else {
+                    langCbs.forEach(cb => cb.checked = false);
+                }
+                checkChanges();
+            });
+
+            customStoryCb.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    langCbs.forEach(cb => cb.checked = false);
+                    allCb.checked = false;
+                }
+                checkChanges();
             });
 
             langCbs.forEach(cb => {
-                cb.addEventListener('change', () => {
-                    if (!cb.checked) {
+                cb.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        customStoryCb.checked = false;
+                    }
+                    if (!e.target.checked) {
                         allCb.checked = false;
                     } else {
                         const allChecked = Array.from(langCbs).every(c => c.checked);
                         if (allChecked) allCb.checked = true;
                     }
+                    checkChanges();
                 });
             });
         });
