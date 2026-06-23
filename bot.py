@@ -584,7 +584,7 @@ async def start(client, message):
     await message.reply(
         f"Hey {name}\n\n"
         f"{validity_text}"
-        "Send story link to get started\n\n"
+        "Send story link to download\n\n"
         "Use below command to access bot\n"
         f"{cmd_text}"
     )
