@@ -336,7 +336,7 @@ def api_get_buyers():
     now = datetime.now(ist)
     
     for uid in subscribers:
-        db.cursor.execute('SELECT first_name, username FROM users WHERE user_id = ?', (uid,))
+        db.cursor.execute('SELECT first_name, username, joined_at FROM users WHERE user_id = ?', (uid,))
         urow = db.cursor.fetchone()
         
         db.cursor.execute('SELECT sub_data FROM subscriptions WHERE user_id = ? AND sub_type = "selected_story"', (uid,))
@@ -345,6 +345,7 @@ def api_get_buyers():
         db.cursor.execute('SELECT value FROM settings WHERE key = ?', (f"buyer_name_{uid}",))
         c_row = db.cursor.fetchone()
         buyer_name = c_row[0] if c_row else (urow[0] if urow else "Unknown")
+        joined_at = urow[2] if urow else ""
         
         db.cursor.execute('SELECT expiry FROM subscriptions WHERE user_id = ? LIMIT 1', (uid,))
         exp_row = db.cursor.fetchone()
@@ -358,6 +359,7 @@ def api_get_buyers():
         buyers[str(uid)] = {
             "name": buyer_name,
             "username": urow[1] if urow else "",
+            "joined_at": joined_at,
             "allowed_shows": shows,
             "is_expired": is_expired,
             "status": "active"
@@ -392,6 +394,7 @@ def api_update_buyer_all(userid):
     langs = data.get("langs", [])
     has_all = data.get("has_all", False)
     extra_episode = data.get("extra_episode", False)
+    custom_story = data.get("custom_story", False)
     custom_name = data.get("name", "").strip()
     
     if custom_name:
@@ -413,7 +416,7 @@ def api_update_buyer_all(userid):
     old_exp = db.cursor.fetchone()
     current_expiry = old_exp[0] if old_exp else None
 
-    db.cursor.execute('DELETE FROM subscriptions WHERE user_id = ? AND sub_type IN ("language", "all", "validity", "extra_episode")', (userid,))
+    db.cursor.execute('DELETE FROM subscriptions WHERE user_id = ? AND sub_type IN ("language", "all", "validity", "extra_episode", "custom_story")', (userid,))
     
     db.cursor.execute('SELECT username FROM users WHERE user_id = ?', (userid,))
     urow = db.cursor.fetchone()
@@ -452,6 +455,8 @@ def api_update_buyer_all(userid):
         db.add_subscription(userid, uname, "all", "", expiry, False)
     if extra_episode:
         db.add_subscription(userid, uname, "extra_episode", "", expiry, False)
+    if custom_story:
+        db.add_subscription(userid, uname, "custom_story", "", expiry, False)
     for lang in langs:
         db.add_subscription(userid, uname, "language", lang, expiry, False)
     db.add_subscription(userid, uname, "validity", "", expiry, False)
@@ -558,6 +563,9 @@ def get_buyer_info(userid):
     db.cursor.execute('SELECT 1 FROM subscriptions WHERE user_id = ? AND sub_type = "extra_episode"', (userid,))
     extra_episode = bool(db.cursor.fetchone())
     
+    db.cursor.execute('SELECT 1 FROM subscriptions WHERE user_id = ? AND sub_type = "custom_story"', (userid,))
+    custom_story = bool(db.cursor.fetchone())
+    
     db.cursor.execute('SELECT value FROM settings WHERE key = ?', (f"set_cover_{userid}",))
     c_row = db.cursor.fetchone()
     set_cover = (c_row[0] == "1") if c_row else False
@@ -605,6 +613,7 @@ def get_buyer_info(userid):
         "allowed_langs": allowed_langs,
         "has_all": has_all,
         "extra_episode": extra_episode,
+        "custom_story": custom_story,
         "set_cover": set_cover,
         "set_artist": set_artist,
         "expiry_text": expiry_text,
@@ -629,15 +638,16 @@ def get_buyer_saved_shows(userid):
 
 @flask_app.route('/api/users', methods=['GET'])
 def api_get_users():
-    db.cursor.execute('SELECT user_id, first_name, username FROM users')
+    db.cursor.execute('SELECT user_id, first_name, username, joined_at FROM users')
     all_users = db.cursor.fetchall()
     
     filtered_users = {}
-    for uid, name, uname in all_users:
+    for uid, name, uname, joined_at in all_users:
         if uid not in Config.OWNER_IDS:
             filtered_users[str(uid)] = {
                 "name": name or "Unknown",
-                "username": uname
+                "username": uname,
+                "joined_at": joined_at
             }
             
     return jsonify(filtered_users)
