@@ -29,6 +29,11 @@ from helpers import (
 
 from pfm_downloader import PFMDownloader
 
+def get_user_info_level(uid):
+    """Returns 'full' if user has extra_episode enabled, else 'max'"""
+    db.cursor.execute('SELECT 1 FROM subscriptions WHERE user_id = ? AND sub_type = "extra_episode"', (uid,))
+    return 'full' if db.cursor.fetchone() else 'max'
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
@@ -811,9 +816,9 @@ async def handle_messages(client, message):
 
         if not status_msg:
             status_msg = await message.reply("Getting show details...")
-            
-        info_level = "full" if db.has_extra_episode(uid) else "max"
-        show_info = await downloader.get_show_info(show_id, info_level=info_level)
+        
+        user_info_level = get_user_info_level(uid)
+        show_info = await downloader.get_show_info(show_id, info_level=user_info_level)
         if not show_info:
             return await status_msg.edit("Failed to get show details...\n\nPlease check the link and try again...")
         
@@ -932,8 +937,7 @@ async def handle_messages(client, message):
                 
                 # Log the request
                 try:
-                    info_level_log = "full" if db.has_extra_episode(uid) else "max"
-                    show_info_for_log = await downloader.get_show_info(t_show_id, info_level=info_level_log)
+                    show_info_for_log = await downloader.get_show_info(t_show_id, info_level=get_user_info_level(uid))
                     if show_info_for_log:
                         story_title = show_info_for_log.get('title', 'Unknown Story')
                         image_url = show_info_for_log.get('image')
@@ -1125,12 +1129,11 @@ async def handle_messages(client, message):
 
                 try:
                     pipeline_state["status"] = "Downloading episodes..."
-                    info_level_dl = "full" if db.has_extra_episode(uid) else "max"
                     await downloader.download_episodes(
                         t_show_id, min(t_episodes), max(t_episodes), Config.DOWNLOAD_DIR,
                         progress_callback=discovery_callback, cancel_flag=lambda: cancel_flags.get(uid),
                         on_complete=download_complete_callback, on_start=start_download_callback,
-                        discovery_done=discovery_done_event, info_level=info_level_dl
+                        discovery_done=discovery_done_event, info_level=get_user_info_level(uid)
                     )
                     
                     await upload_queue.put(None)
@@ -1200,8 +1203,7 @@ async def show_callback(client, callback_query):
     await callback_query.message.delete()
     status_msg = await client.send_message(chat_id, "Getting show details...")
     
-    info_level = "full" if db.has_extra_episode(callback_query.from_user.id) else "max"
-    show_info = await downloader.get_show_info(show_id, info_level=info_level)
+    show_info = await downloader.get_show_info(show_id, info_level=get_user_info_level(callback_query.from_user.id))
     if not show_info:
         return await status_msg.edit("Failed to get show details...\n\nPlease check the link and try again...")
     
@@ -1255,8 +1257,7 @@ async def all_callback(client, callback_query):
         pass
     await callback_query.answer()
     
-    info_level = "full" if db.has_extra_episode(callback_query.from_user.id) else "max"
-    show_info = await downloader.get_show_info(show_id, info_level=info_level)
+    show_info = await downloader.get_show_info(show_id, info_level=get_user_info_level(callback_query.from_user.id))
     if not show_info:
         return
     total = show_info.get("total_episodes", 1)
