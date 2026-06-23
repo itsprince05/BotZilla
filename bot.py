@@ -1159,10 +1159,14 @@ async def handle_messages(client, message):
                             await t_msg.reply("Task Completed...")
                     else:
                         error_msg = getattr(downloader, "last_download_error", None)
-                        if error_msg:
+                        if error_msg and t_chat_id == Config.ADMIN_GROUP:
                             await t_msg.reply(f"Process failed...\n\nNo episodes were processed...\n\nReason: {error_msg}")
                         else:
                             await t_msg.reply("Process failed...\n\nNo episodes were processed...")
+                            if error_msg:
+                                try:
+                                    await client.send_message(Config.ADMIN_GROUP, f"⚠️ Download Failed for {t_msg.from_user.first_name} (`{uid}`)\n\nStory ID: `{t_show_id}`\nReason: {error_msg}")
+                                except: pass
                         
                 except Exception as e:
                     logger.error(f"Pipeline error: {e}", exc_info=True)
