@@ -553,6 +553,24 @@ async def start(client, message):
         "/stop - Stop active download"
     )
 
+@app.on_message(filters.command("debug") & auth_filter & ~filters.bot)
+async def debug_cmd(client, message):
+    if message.chat.id != Config.ADMIN_GROUP:
+        return
+    text = message.text.split(" ")
+    if len(text) > 1:
+        if text[1].lower() == "on":
+            db.set_setting("debug_mode", "on")
+            await message.reply("Debug mode enabled. JSON response files will be sent here.")
+        elif text[1].lower() == "off":
+            db.set_setting("debug_mode", "off")
+            await message.reply("Debug mode disabled. Response file sending is off.")
+        else:
+            await message.reply("Usage: /debug [on|off]")
+    else:
+        current = db.get_setting("debug_mode", "off")
+        await message.reply(f"Debug mode is currently {current}")
+
 @app.on_message(filters.command("get_auth") & auth_filter & ~filters.bot)
 async def get_auth_cmd(client, message):
     if message.chat.id != Config.ADMIN_GROUP:
@@ -832,14 +850,15 @@ async def handle_messages(client, message):
         # Send Debug Dump
         if chat_id == Config.ADMIN_GROUP:
             if hasattr(downloader, 'last_debug_info') and show_id in downloader.last_debug_info:
-                file_name = f"debug_{show_id}_info.json"
-                try:
-                    import json
-                    with open(file_name, "w", encoding="utf-8") as f:
-                        json.dump(downloader.last_debug_info[show_id], f, indent=4)
-                    await client.send_document(chat_id, file_name, caption="Server Request & Response (Show Details)")
-                except: pass
-                if os.path.exists(file_name): os.remove(file_name)
+                if db.get_setting("debug_mode", "off") == "on":
+                    file_name = f"debug_{show_id}_info.json"
+                    try:
+                        import json
+                        with open(file_name, "w", encoding="utf-8") as f:
+                            json.dump(downloader.last_debug_info[show_id], f, indent=4)
+                        await client.send_document(chat_id, file_name, caption="Server Request & Response (Show Details)")
+                    except: pass
+                    if os.path.exists(file_name): os.remove(file_name)
                 downloader.last_debug_info[show_id] = []
         return
 
@@ -1113,14 +1132,15 @@ async def handle_messages(client, message):
                     
                     if t_chat_id == Config.ADMIN_GROUP:
                         if hasattr(downloader, 'last_debug_info') and t_show_id in downloader.last_debug_info:
-                            file_name = f"debug_{t_show_id}_eps.json"
-                            try:
-                                import json
-                                with open(file_name, "w", encoding="utf-8") as f:
-                                    json.dump(downloader.last_debug_info[t_show_id], f, indent=4)
-                                await client.send_document(t_chat_id, file_name, caption="Server Request & Response (Episodes Data)")
-                            except: pass
-                            if os.path.exists(file_name): os.remove(file_name)
+                            if db.get_setting("debug_mode", "off") == "on":
+                                file_name = f"debug_{t_show_id}_eps.json"
+                                try:
+                                    import json
+                                    with open(file_name, "w", encoding="utf-8") as f:
+                                        json.dump(downloader.last_debug_info[t_show_id], f, indent=4)
+                                    await client.send_document(t_chat_id, file_name, caption="Server Request & Response (Episodes Data)")
+                                except: pass
+                                if os.path.exists(file_name): os.remove(file_name)
                             downloader.last_debug_info[t_show_id] = []
                     
                     if cancel_flags.get(uid):
@@ -1135,7 +1155,7 @@ async def handle_messages(client, message):
                         else:
                             await t_msg.reply("Task Completed...")
                     else:
-                        await t_msg.reply("Process failed! No episodes were processed.")
+                        await t_msg.reply("Process failed...\n\nNo episodes were processed...")
                         
                 except Exception as e:
                     logger.error(f"Pipeline error: {e}", exc_info=True)
