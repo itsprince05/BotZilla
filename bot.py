@@ -20,6 +20,7 @@ from aiogram.types import FSInputFile
 
 from database import db
 from config import Config
+import dashboard
 from dashboard import start_flask
 from helpers import (
     parse_range,
@@ -366,7 +367,8 @@ async def dashboard_cmd(client, message):
         await asyncio.sleep(0.5)
         
     if tunnel_url:
-        await m.edit(f"Dashboard URL...\n\n{tunnel_url}")
+        pwd = dashboard.update_password()
+        await m.edit(f"Dashboard URL...\n\n{pwd}\n\n{tunnel_url}")
     else:
         await m.edit("Failed to generate a new URL. Try again later.")
 
@@ -1307,7 +1309,7 @@ async def main():
             await asyncio.sleep(0.5)
             
         if tunnel_url:
-            await restart_msg.edit(f"Bot is running and updated successfully...\n\nDashboard URL...\n\n{tunnel_url}")
+            await restart_msg.edit(f"Bot is running and updated successfully...\n\nDashboard URL...\n\n{dashboard.DASHBOARD_PASSWORD}\n\n{tunnel_url}")
             
     # Start auto delete task in background
     asyncio.create_task(auto_delete_task())
