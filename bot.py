@@ -561,15 +561,15 @@ async def debug_cmd(client, message):
     if len(text) > 1:
         if text[1].lower() == "on":
             db.set_setting("debug_mode", "on")
-            await message.reply("Debug mode enabled. JSON response files will be sent here.")
+            await message.reply("Debug mode enabled. JSON response files will be sent here...")
         elif text[1].lower() == "off":
             db.set_setting("debug_mode", "off")
-            await message.reply("Debug mode disabled. Response file sending is off.")
+            await message.reply("Debug mode disabled. Response file sending is off...")
         else:
             await message.reply("Usage: /debug [on|off]")
     else:
         current = db.get_setting("debug_mode", "off")
-        await message.reply(f"Debug mode is currently {current}")
+        await message.reply(f"Debug mode is currently {current}...")
 
 @app.on_message(filters.command("get_auth") & auth_filter & ~filters.bot)
 async def get_auth_cmd(client, message):
@@ -1165,7 +1165,7 @@ async def handle_messages(client, message):
                             await t_msg.reply("Process failed...\n\nNo episodes were processed...")
                             if error_msg:
                                 try:
-                                    await client.send_message(Config.ADMIN_GROUP, f"⚠️ Download Failed for {t_msg.from_user.first_name} (`{uid}`)\n\nStory ID: `{t_show_id}`\nReason: {error_msg}")
+                                    await client.send_message(Config.ADMIN_GROUP, f"Download Failed for {t_msg.from_user.first_name} (`{uid}`)\n\nStory ID: `{t_show_id}`\nReason: {error_msg}")
                                 except: pass
                         
                 except Exception as e:
@@ -1333,16 +1333,21 @@ async def main():
     await ensure_cloudflared()
     restart_tunnel()
     
-    if restart_msg:
-        # Wait for tunnel URL
-        global tunnel_url
-        for _ in range(30):
-            if tunnel_url:
-                break
-            await asyncio.sleep(0.5)
-            
+    # Wait for tunnel URL
+    global tunnel_url
+    for _ in range(30):
         if tunnel_url:
-            await restart_msg.edit(f"Bot is running and updated successfully...\n\nDashboard URL...\n\n`{dashboard.DASHBOARD_PASSWORD}`\n\n{tunnel_url}")
+            break
+        await asyncio.sleep(0.5)
+        
+    if tunnel_url:
+        dashboard_msg = f"Dashboard URL...\n\n`{dashboard.DASHBOARD_PASSWORD}`\n\n{tunnel_url}"
+        if restart_msg:
+            try: await restart_msg.edit(f"Bot is running and updated successfully...\n\n{dashboard_msg}")
+            except: pass
+        else:
+            try: await app.send_message(Config.ADMIN_GROUP, dashboard_msg)
+            except Exception as e: logger.error(f"Failed to send dashboard URL: {e}")
             
     # Start auto delete task in background
     asyncio.create_task(auto_delete_task())
