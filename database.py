@@ -252,6 +252,10 @@ class Database:
                     return True
         
         return False
+        
+    def has_extra_episode(self, user_id):
+        self.cursor.execute('SELECT 1 FROM subscriptions WHERE user_id = ? AND sub_type = "extra_episode"', (user_id,))
+        return bool(self.cursor.fetchone())
 
     # JSON Backup Helpers
     def export_users(self):
