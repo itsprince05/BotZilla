@@ -127,16 +127,28 @@
                 <h3 style="margin-bottom: 10px;">Language Access</h3>
                 
                 <div style="display: flex; flex-direction: column; gap: 10px;">
-                    <!-- All Stories (Full Width) -->
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
-                            <input type="checkbox" id="cb_all_stories" class="checkbox" {% if has_all %}checked{% endif %}>
-                            <div class="custom-checkbox">
-                                <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-                                <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
-                            </div>
-                        </label>
-                        <label for="cb_all_stories" style="font-size: 15px; font-weight: 600; cursor: pointer;">All Stories</label>
+                    <!-- All Stories and Extra Episode -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
+                                <input type="checkbox" id="cb_all_stories" class="checkbox" {% if has_all %}checked{% endif %}>
+                                <div class="custom-checkbox">
+                                    <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+                                    <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
+                                </div>
+                            </label>
+                            <label for="cb_all_stories" style="font-size: 15px; font-weight: 600; cursor: pointer;">All Stories</label>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
+                                <input type="checkbox" id="cb_extra_episode" class="checkbox" {% if extra_episode %}checked{% endif %}>
+                                <div class="custom-checkbox">
+                                    <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+                                    <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
+                                </div>
+                            </label>
+                            <label for="cb_extra_episode" style="font-size: 15px; font-weight: 600; cursor: pointer;">Extra Episode</label>
+                        </div>
                     </div>
                     
                     <div style="border-top: 1px solid #eee; margin: 5px 0;"></div>
@@ -544,6 +556,7 @@
                 .then(info => {
                     document.getElementById('userNameInput').value = info.name;
                     document.getElementById('cb_all_stories').checked = info.has_all;
+                    document.getElementById('cb_extra_episode').checked = info.extra_episode;
                     
                     document.querySelectorAll('.lang-checkbox').forEach(cb => {
                         cb.checked = info.allowed_langs.includes(cb.value);
@@ -592,6 +605,7 @@
                 if (cb.checked) newLangs.push(cb.value);
             });
             const hasAll = document.getElementById('cb_all_stories').checked;
+            const extraEpisode = document.getElementById('cb_extra_episode').checked;
             
             const userName = document.getElementById('userNameInput').value;
             const durationEl = document.querySelector('input[name="durationRadio"]:checked');
@@ -611,6 +625,7 @@
                 body: JSON.stringify({
                     langs: newLangs,
                     has_all: hasAll,
+                    extra_episode: extraEpisode,
                     name: userName,
                     duration: duration,
                     set_cover: setCover,
@@ -653,6 +668,7 @@
         function saveInitialState() {
             initialState.userName = document.getElementById('userNameInput').value;
             initialState.allStories = document.getElementById('cb_all_stories').checked;
+            initialState.extraEpisode = document.getElementById('cb_extra_episode').checked;
             initialState.langs = Array.from(document.querySelectorAll('.lang-checkbox')).map(cb => cb.checked);
             initialState.duration = document.querySelector('input[name="durationRadio"]:checked') ? document.querySelector('input[name="durationRadio"]:checked').value : null;
             initialState.customDays = document.getElementById('customDaysInput').value;
@@ -682,9 +698,11 @@
 
             if (activeTab === 'allowed-shows-tab') {
                 const currentAllStories = document.getElementById('cb_all_stories').checked;
+                const currentExtraEpisode = document.getElementById('cb_extra_episode').checked;
                 const currentLangs = Array.from(document.querySelectorAll('.lang-checkbox')).map(cb => cb.checked);
                 
                 if (currentAllStories !== initialState.allStories) hasChanges = true;
+                if (currentExtraEpisode !== initialState.extraEpisode) hasChanges = true;
                 for (let i = 0; i < currentLangs.length; i++) {
                     if (currentLangs[i] !== initialState.langs[i]) {
                         hasChanges = true;
