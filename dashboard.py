@@ -492,19 +492,32 @@ def api_update_buyer_all(userid):
 @flask_app.route('/api/buyers/<userid>/custom_rules', methods=['GET'])
 def get_custom_rules(userid):
     userid = int(userid)
+    db.cursor.execute('SELECT 1 FROM subscriptions WHERE user_id = ? AND sub_type = "extra_episode"', (userid,))
+    global_extra_ep = bool(db.cursor.fetchone())
+
     db.cursor.execute('''
-        SELECT s.show_id, s.title, sub.sub_type 
+        SELECT sub.sub_data, s.title, sub.sub_type 
         FROM subscriptions sub 
         LEFT JOIN stories s ON sub.sub_data = s.show_id 
-        WHERE sub.user_id = ? AND sub.sub_type IN ('selected_story', 'blocked_story')
+        WHERE sub.user_id = ? AND sub.sub_type IN ('selected_story', 'blocked_story', 'extra_ep_story', 'extra_ep_remove_story')
     ''', (userid,))
-    rules = []
+    shows = {}
     for r in db.cursor.fetchall():
-        rules.append({
-            "show_id": r[0],
-            "title": r[1] or str(r[0]),
-            "type": "allow" if r[2] == "selected_story" else "block"
-        })
+        show_id = r[0]
+        title = r[1] or str(show_id)
+        sub_type = r[2]
+        if show_id not in shows:
+            shows[show_id] = {"show_id": show_id, "title": title, "type": "allow", "extra_ep": global_extra_ep}
+        if sub_type == "blocked_story":
+            shows[show_id]["type"] = "block"
+        elif sub_type == "selected_story":
+            shows[show_id]["type"] = "allow"
+        elif sub_type == "extra_ep_story":
+            shows[show_id]["extra_ep"] = True
+        elif sub_type == "extra_ep_remove_story":
+            shows[show_id]["extra_ep"] = False
+    
+    rules = list(shows.values())
     rules.sort(key=lambda x: str(x['title']).lower())
     return jsonify(rules)
 
@@ -514,18 +527,34 @@ def manage_custom_rule(userid):
     data = request.json
     show_id = data.get("show_id")
     action = data.get("action")
-    if not show_id or action not in ["allow", "block", "remove"]:
+    if not show_id or action not in ["allow", "block", "remove", "set_extra_ep"]:
         return jsonify({"success": False})
         
-    # Remove existing rule for this show
-    db.cursor.execute('DELETE FROM subscriptions WHERE user_id = ? AND sub_type IN ("selected_story", "blocked_story") AND sub_data = ?', (userid, show_id))
-    
-    if action in ["allow", "block"]:
-        db.cursor.execute('SELECT username FROM users WHERE user_id = ?', (userid,))
-        urow = db.cursor.fetchone()
-        uname = urow[0] if urow else ""
-        sub_type = "selected_story" if action == "allow" else "blocked_story"
-        db.add_subscription(userid, uname, sub_type, show_id, None, False)
+    db.cursor.execute('SELECT username FROM users WHERE user_id = ?', (userid,))
+    urow = db.cursor.fetchone()
+    uname = urow[0] if urow else ""
+        
+    if action in ["allow", "block", "remove"]:
+        db.cursor.execute('DELETE FROM subscriptions WHERE user_id = ? AND sub_type IN ("selected_story", "blocked_story") AND sub_data = ?', (userid, show_id))
+        if action in ["allow", "block"]:
+            sub_type = "selected_story" if action == "allow" else "blocked_story"
+            db.add_subscription(userid, uname, sub_type, show_id, None, False)
+        
+        # If removing rule entirely, also remove extra_ep overrides
+        if action == "remove":
+            db.cursor.execute('DELETE FROM subscriptions WHERE user_id = ? AND sub_type IN ("extra_ep_story", "extra_ep_remove_story") AND sub_data = ?', (userid, show_id))
+            
+    elif action == "set_extra_ep":
+        extra_ep = data.get("extra_ep", False)
+        db.cursor.execute('SELECT 1 FROM subscriptions WHERE user_id = ? AND sub_type = "extra_episode"', (userid,))
+        global_extra_ep = bool(db.cursor.fetchone())
+        
+        db.cursor.execute('DELETE FROM subscriptions WHERE user_id = ? AND sub_type IN ("extra_ep_story", "extra_ep_remove_story") AND sub_data = ?', (userid, show_id))
+        
+        if extra_ep and not global_extra_ep:
+            db.add_subscription(userid, uname, "extra_ep_story", show_id, None, False)
+        elif not extra_ep and global_extra_ep:
+            db.add_subscription(userid, uname, "extra_ep_remove_story", show_id, None, False)
         
     db.conn.commit()
     return jsonify({"success": True})
@@ -565,6 +594,9 @@ def get_buyer_info(userid):
     
     db.cursor.execute('SELECT 1 FROM subscriptions WHERE user_id = ? AND sub_type = "custom_story"', (userid,))
     custom_story = bool(db.cursor.fetchone())
+    
+    if not allowed_langs and not has_all:
+        custom_story = True
     
     db.cursor.execute('SELECT value FROM settings WHERE key = ?', (f"set_cover_{userid}",))
     c_row = db.cursor.fetchone()
