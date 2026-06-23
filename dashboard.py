@@ -416,6 +416,20 @@ def api_update_buyer_all(userid):
     else:
         db.cursor.execute('DELETE FROM settings WHERE key = ?', (f"buyer_name_{userid}",))
         db.conn.commit()
+
+    set_cover = data.get("set_cover", False)
+    if set_cover:
+        db.set_setting(f"set_cover_{userid}", "1")
+    else:
+        db.cursor.execute('DELETE FROM settings WHERE key = ?', (f"set_cover_{userid}",))
+        db.conn.commit()
+        
+    set_artist = data.get("set_artist", False)
+    if set_artist:
+        db.set_setting(f"set_artist_{userid}", "1")
+    else:
+        db.cursor.execute('DELETE FROM settings WHERE key = ?', (f"set_artist_{userid}",))
+        db.conn.commit()
         
     saved_shows = data.get("saved_shows", None)
     if saved_shows is not None:
