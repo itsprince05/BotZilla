@@ -28,12 +28,21 @@ def update_password():
 @flask_app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        pwd = request.form.get('password')
+        if request.is_json:
+            data = request.get_json(silent=True) or {}
+            pwd = data.get('password')
+        else:
+            pwd = request.form.get('password')
+            
         if pwd == DASHBOARD_PASSWORD:
             session['logged_in'] = True
             session['login_time'] = time.time()
+            if request.is_json:
+                return jsonify({"success": True})
             return redirect(url_for('index'))
         else:
+            if request.is_json:
+                return jsonify({"success": False, "error": "Invalid Password"})
             return render_template('login.html', error="Invalid Password")
     return render_template('login.html')
 
@@ -67,6 +76,9 @@ def user_page(userid):
     
     db.cursor.execute('SELECT 1 FROM subscriptions WHERE user_id = ? AND sub_type = "all"', (userid,))
     has_all = bool(db.cursor.fetchone())
+    
+    db.cursor.execute('SELECT 1 FROM subscriptions WHERE user_id = ? AND sub_type = "extra_episode"', (userid,))
+    extra_episode = bool(db.cursor.fetchone())
     
     username = u_row[1] if u_row and u_row[1] else ""
     
@@ -113,7 +125,7 @@ def user_page(userid):
             expiry_text = "Lifetime validity"
             expiry_color = "#2b8a3e"
     
-    return render_template('user_shows.html', userid=str(userid), name=name, real_name=real_name, username=username, allowed_langs=allowed_langs, has_all=has_all, saved_shows=saved_shows, expiry_text=expiry_text, expiry_color=expiry_color, set_cover=False, set_artist=False)
+    return render_template('user_shows.html', userid=str(userid), name=name, real_name=real_name, username=username, allowed_langs=allowed_langs, has_all=has_all, extra_episode=extra_episode, saved_shows=saved_shows, expiry_text=expiry_text, expiry_color=expiry_color, set_cover=False, set_artist=False)
 
 @flask_app.route('/new_buyer/<userid>')
 def new_buyer_page(userid):
@@ -131,7 +143,7 @@ def new_buyer_page(userid):
     expiry_text = "No active validity"
     expiry_color = "#666"
     
-    return render_template('new_buyer.html', userid=str(userid), name=name, real_name=real_name, username=username, allowed_langs=[], has_all=False, saved_shows=[], expiry_text=expiry_text, expiry_color=expiry_color, set_cover=False, set_artist=False)
+    return render_template('new_buyer.html', userid=str(userid), name=name, real_name=real_name, username=username, allowed_langs=[], has_all=False, extra_episode=False, saved_shows=[], expiry_text=expiry_text, expiry_color=expiry_color, set_cover=False, set_artist=False)
 
 @flask_app.route('/show/<path:name>')
 def show_page(name):
@@ -352,6 +364,7 @@ def api_update_buyer_all(userid):
         
     langs = data.get("langs", [])
     has_all = data.get("has_all", False)
+    extra_episode = data.get("extra_episode", False)
     custom_name = data.get("name", "").strip()
     
     if custom_name:
@@ -373,7 +386,7 @@ def api_update_buyer_all(userid):
     old_exp = db.cursor.fetchone()
     current_expiry = old_exp[0] if old_exp else None
 
-    db.cursor.execute('DELETE FROM subscriptions WHERE user_id = ? AND sub_type IN ("language", "all", "validity")', (userid,))
+    db.cursor.execute('DELETE FROM subscriptions WHERE user_id = ? AND sub_type IN ("language", "all", "validity", "extra_episode")', (userid,))
     
     db.cursor.execute('SELECT username FROM users WHERE user_id = ?', (userid,))
     urow = db.cursor.fetchone()
@@ -410,6 +423,8 @@ def api_update_buyer_all(userid):
     
     if has_all:
         db.add_subscription(userid, uname, "all", "", expiry, False)
+    if extra_episode:
+        db.add_subscription(userid, uname, "extra_episode", "", expiry, False)
     for lang in langs:
         db.add_subscription(userid, uname, "language", lang, expiry, False)
     db.add_subscription(userid, uname, "validity", "", expiry, False)
@@ -513,6 +528,9 @@ def get_buyer_info(userid):
     db.cursor.execute('SELECT 1 FROM subscriptions WHERE user_id = ? AND sub_type = "all"', (userid,))
     has_all = bool(db.cursor.fetchone())
     
+    db.cursor.execute('SELECT 1 FROM subscriptions WHERE user_id = ? AND sub_type = "extra_episode"', (userid,))
+    extra_episode = bool(db.cursor.fetchone())
+    
     db.cursor.execute('SELECT value FROM settings WHERE key = ?', (f"set_cover_{userid}",))
     c_row = db.cursor.fetchone()
     set_cover = (c_row[0] == "1") if c_row else False
@@ -559,6 +577,7 @@ def get_buyer_info(userid):
         "name": name,
         "allowed_langs": allowed_langs,
         "has_all": has_all,
+        "extra_episode": extra_episode,
         "set_cover": set_cover,
         "set_artist": set_artist,
         "expiry_text": expiry_text,
