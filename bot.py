@@ -877,15 +877,31 @@ async def handle_messages(client, message):
             return await message.reply(msg or "You are not authorized to use this bot.")
 
         show_id = user_show.get(chat_id)
+        invalid_msg = "Invalid episode number...\n\nSend episode number which you want to download...\n\nSingle 1\nMultiple 1 10"
+        
         try:
             episodes = parse_range(text)
         except Exception as e:
+            if str(e) == "INVALID_RANGE":
+                user_awaiting_range[chat_id] = True
+                return await message.reply(invalid_msg)
             return await message.reply(f"Invalid range: {str(e)}\n\nExample: `1 10`")
             
         if not episodes:
-            return await message.reply("No valid episodes in the specified range.")
+            user_awaiting_range[chat_id] = True
+            return await message.reply(invalid_msg)
 
         start_seq, end_seq = min(episodes), max(episodes)
+        
+        try:
+            show_info = await downloader.get_show_info(show_id, info_level=get_user_info_level(uid))
+            if show_info and 'total_episodes' in show_info:
+                if end_seq > show_info['total_episodes']:
+                    user_awaiting_range[chat_id] = True
+                    return await message.reply(invalid_msg)
+        except Exception as e:
+            logger.error(f"Error checking total episodes: {e}")
+
         is_all = user_is_all_download.pop(chat_id, False)
         
         task_data = {
