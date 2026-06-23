@@ -227,8 +227,8 @@ def api_custom_show_info():
         return jsonify({"success": True, "title": s_row[0], "show_id": show_id})
         
     import asyncio
-    from pfm_downloader import PocketFMDownloader
-    downloader = PocketFMDownloader()
+    from pfm_downloader import PFMDownloader
+    downloader = PFMDownloader()
     
     try:
         loop = asyncio.new_event_loop()
