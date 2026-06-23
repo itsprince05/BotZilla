@@ -431,7 +431,11 @@
                 fetch('/api/users?_t=' + Date.now(), { cache: 'no-store' }).then(r => r.json())
             ])
                 .then(([buyers, users]) => {
-                    const entries = Object.entries(buyers).reverse();
+                    const entries = Object.entries(buyers).sort((a, b) => {
+                        const dateA = new Date(a[1].joined_at || 0);
+                        const dateB = new Date(b[1].joined_at || 0);
+                        return dateB - dateA; // Descending (newest first)
+                    });
                     document.getElementById('buyersCount').textContent = entries.length + ' Users';
                     const container = document.getElementById('buyersTable');
                     container.innerHTML = '';
@@ -478,7 +482,11 @@
                 fetch('/api/users?_t=' + Date.now(), { cache: 'no-store' }).then(r => r.json())
             ])
                 .then(([buyers, users]) => {
-                    const entries = Object.entries(users).reverse();
+                    const entries = Object.entries(users).sort((a, b) => {
+                        const dateA = new Date(a[1].joined_at || 0);
+                        const dateB = new Date(b[1].joined_at || 0);
+                        return dateB - dateA; // Descending (newest first)
+                    });
                     document.getElementById('usersCount').textContent = entries.length + ' Users';
                     const container = document.getElementById('usersTable');
                     container.innerHTML = '';
