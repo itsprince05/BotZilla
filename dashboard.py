@@ -267,7 +267,7 @@ def api_custom_show_info():
                                       (show_id, title, f"https://www.pocketfm.com/show/{show_id}"))
                     db.conn.commit()
                     return jsonify({"success": True, "title": title, "show_id": show_id})
-        return jsonify({"success": False, "error": f"Show details not found. API Response Status: {data.get('status')} Message: {data.get('message', 'Unknown')}"})
+        return jsonify({"success": False, "error": "Show details not found.", "raw_response": data})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
         
