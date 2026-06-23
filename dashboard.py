@@ -231,13 +231,20 @@ def api_custom_show_info():
     try:
         # Get auth token
         head_res = req_lib.head(Config.PFM_WEB_BASE, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}, timeout=10)
-        cookie_str = head_res.headers.get("set-cookie", "")
-        auth_token = ""
-        if cookie_str:
-            for part in cookie_str.split(","):
-                if "auth-token" in part:
-                    auth_token = part.strip().split(";")[0].split("=", 1)[1]
-                    break
+        
+        # Use cookies dict directly for reliability
+        auth_token = head_res.cookies.get('auth-token', '')
+        
+        if not auth_token:
+            cookie_str = head_res.headers.get("set-cookie", "")
+            if cookie_str:
+                for part in cookie_str.split(","):
+                    if "auth-token" in part:
+                        try:
+                            auth_token = part.strip().split(";")[0].split("=", 1)[1]
+                        except:
+                            pass
+                        break
         
         headers = {
             "version-name": "9.1.3",
@@ -246,7 +253,7 @@ def api_custom_show_info():
             "authorization": f"Bearer {auth_token}"
         }
         
-        api_url = f"{Config.PFM_API_BASE}/v2/content_api/show.get_details?show_id={show_id}&curr_ptr=0&info_level=max"
+        api_url = f"{Config.PFM_API_BASE}/v2/content_api/show.get_details?show_id={show_id}&curr_ptr=0"
         res = req_lib.get(api_url, headers=headers, timeout=15)
         data = res.json()
         
@@ -260,6 +267,7 @@ def api_custom_show_info():
                                       (show_id, title, f"https://www.pocketfm.com/show/{show_id}"))
                     db.conn.commit()
                     return jsonify({"success": True, "title": title, "show_id": show_id})
+        return jsonify({"success": False, "error": f"Show details not found. API Response Status: {data.get('status')} Message: {data.get('message', 'Unknown')}"})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
         
