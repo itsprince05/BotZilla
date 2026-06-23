@@ -263,7 +263,7 @@ def api_custom_show_info():
                 item = res_list[0]
                 title = item.get("show_title")
                 if title:
-                    db.cursor.execute('INSERT OR REPLACE INTO stories (show_id, title, url) VALUES (?, ?, ?)', 
+                    db.cursor.execute('INSERT OR REPLACE INTO stories (show_id, title, web_link) VALUES (?, ?, ?)', 
                                       (show_id, title, f"https://www.pocketfm.com/show/{show_id}"))
                     db.conn.commit()
                     return jsonify({"success": True, "title": title, "show_id": show_id})
