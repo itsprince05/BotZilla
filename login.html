@@ -64,12 +64,12 @@
 
         .container::before {
             content: "";
-            flex: 2;
+            flex: 1;
         }
 
         .container::after {
             content: "";
-            flex: 3;
+            flex: 2;
         }
 
         .card {
@@ -183,7 +183,18 @@
                 },
                 body: JSON.stringify({ password: pwd })
             })
-            .then(r => r.json())
+            .then(async r => {
+                if (!r.ok) {
+                    const text = await r.text();
+                    throw new Error("HTTP " + r.status);
+                }
+                const text = await r.text();
+                try {
+                    return JSON.parse(text);
+                } catch(e) {
+                    throw new Error("Invalid response format");
+                }
+            })
             .then(res => {
                 if (res.success) {
                     window.location.href = '/';
@@ -197,7 +208,7 @@
                 }
             })
             .catch(err => {
-                errorMsg.textContent = "Connection Error";
+                errorMsg.textContent = err.message || "Connection Error";
                 errorMsg.style.display = 'block';
                 btn.disabled = false;
                 btn.innerHTML = 'LOGIN';
