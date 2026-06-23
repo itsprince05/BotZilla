@@ -341,6 +341,7 @@ class PFMDownloader:
     async def download_episodes(self,show_id,seq,end,output_dir,progress_callback=None,cancel_flag=None,on_complete=None,on_start=None,quality="192", discovery_done=None):
         total_target = end - seq + 1
         files=[]
+        self.last_download_error = None
         
         # Qualities to try in order
         qualities = [quality, "128", "64", "32"]
@@ -458,6 +459,7 @@ class PFMDownloader:
                                         logger.info(f"Success Ep.{seq_num} at {q}k")
                                         break
                                 except Exception as e:
+                                    self.last_download_error = str(e)
                                     logger.error(f"Worker Error Ep.{seq_num} (Quality {q}k, Attempt {attempt+1}): {e}")
                                 await asyncio.sleep(1)
                         
