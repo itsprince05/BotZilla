@@ -85,9 +85,12 @@ def parse_range(text):
         if len(parts) == 2:
             try:
                 start, end = int(parts[0]), int(parts[1])
-                if start > end: start, end = end, start
+                if start > end:
+                    raise ValueError("INVALID_RANGE")
                 return list(range(start, end + 1))
-            except ValueError:
+            except ValueError as e:
+                if str(e) == "INVALID_RANGE":
+                    raise e
                 pass
 
     episodes = set()
@@ -98,10 +101,13 @@ def parse_range(text):
             try:
                 start, end = part.split("-")
                 start, end = int(start), int(end)
-                if start > end: start, end = end, start
+                if start > end:
+                    raise ValueError("INVALID_RANGE")
                 for i in range(start, end + 1):
                     episodes.add(i)
-            except ValueError:
+            except ValueError as e:
+                if str(e) == "INVALID_RANGE":
+                    raise e
                 continue
         else:
             try:
