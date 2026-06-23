@@ -14,6 +14,9 @@
             color: #1c1e21;
             -webkit-user-select: none;
             user-select: none;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
         }
 
         .action-bar {
@@ -48,12 +51,19 @@
         }
 
         .container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
             max-width: 400px;
-            margin: 40px auto;
+            margin: 0 auto;
             padding: 10px;
+            box-sizing: border-box;
         }
 
         .card {
+            width: 100%;
             background: #ffffff;
             border-radius: 10px;
             padding: 20px;
