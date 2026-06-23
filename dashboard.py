@@ -225,21 +225,41 @@ def api_custom_show_info():
     s_row = db.cursor.fetchone()
     if s_row:
         return jsonify({"success": True, "title": s_row[0], "show_id": show_id})
-        
-    import asyncio
-    from pfm_downloader import PFMDownloader
-    downloader = PFMDownloader()
     
+    # Direct synchronous API call - same as bot's get_show_info but without async
+    import requests as req_lib
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        info = loop.run_until_complete(downloader.get_show_info(show_id))
-        loop.close()
-        if info and "title" in info:
-            db.cursor.execute('INSERT OR REPLACE INTO stories (show_id, title, url) VALUES (?, ?, ?)', 
-                              (show_id, info['title'], f"https://www.pocketfm.com/show/{show_id}"))
-            db.conn.commit()
-            return jsonify({"success": True, "title": info['title'], "show_id": show_id})
+        # Get auth token
+        head_res = req_lib.head(Config.PFM_WEB_BASE, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}, timeout=10)
+        cookie_str = head_res.headers.get("set-cookie", "")
+        auth_token = ""
+        if cookie_str:
+            for part in cookie_str.split(","):
+                if "auth-token" in part:
+                    auth_token = part.strip().split(";")[0].split("=", 1)[1]
+                    break
+        
+        headers = {
+            "version-name": "9.1.3",
+            "platform-version": "29",
+            "app-version": "2013",
+            "authorization": f"Bearer {auth_token}"
+        }
+        
+        api_url = f"{Config.PFM_API_BASE}/v2/content_api/show.get_details?show_id={show_id}&curr_ptr=0&info_level=max"
+        res = req_lib.get(api_url, headers=headers, timeout=15)
+        data = res.json()
+        
+        if data and data.get("status") == 1:
+            res_list = data.get("result", [])
+            if res_list:
+                item = res_list[0]
+                title = item.get("show_title")
+                if title:
+                    db.cursor.execute('INSERT OR REPLACE INTO stories (show_id, title, url) VALUES (?, ?, ?)', 
+                                      (show_id, title, f"https://www.pocketfm.com/show/{show_id}"))
+                    db.conn.commit()
+                    return jsonify({"success": True, "title": title, "show_id": show_id})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
         
