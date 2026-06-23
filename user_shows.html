@@ -1,45 +1,220 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BotZilla Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Outfit', sans-serif; background-color: #f0f2f5; margin: 0; padding: 0; color: #1c1e21; -webkit-user-select: none; user-select: none; }
-        .action-bar { position: sticky; top: 0; z-index: 100; box-sizing: border-box; height: 48px; background: #2481cc; color: white; padding: 0 10px; gap: 10px; display: flex; align-items: center; }
-        .navbar-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: transparent; color: white; cursor: pointer; }
-        .navbar-title { font-size: 18px; font-weight: 600; letter-spacing: 0.5px; }
-        .tabs-container { display: flex; background: #fff; border-bottom: 1px solid #e0e0e0; }
-        .tab { flex: 1; text-align: center; padding: 12px 0; font-weight: 600; color: #666; cursor: pointer; border-bottom: 2px solid transparent; transition: 0.2s; }
-        .tab.active { color: #2481cc; background: #eef5fb; border-bottom: 2px solid #2481cc; }
-        .container { max-width: 800px; margin: 0 auto; padding: 10px; padding-bottom: 80px; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .card { background: #ffffff; border-radius: 10px; padding: 10px; border: 1px solid #e0e0e0; box-sizing: border-box; }
-        .card h3 { margin-top: 0; font-size: 16px; color: #1c1e21; margin-bottom: 5px; }
-        .item-list { display: flex; flex-direction: column; gap: 0; background: #ffffff; border-radius: 10px; overflow: hidden; border: 1px solid #e0e0e0; }
-        .list-card { background: transparent; border-radius: 0; padding: 10px; border: none; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; width: 100%; box-sizing: border-box; }
-        .list-card:last-child { border-bottom: none; }
-        .list-title { font-weight: 600; font-size: 15px; color: #1c1e21; }
-        input[type="text"], textarea { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0; box-sizing: border-box; font-family: inherit; font-size: 15px; }
-        .primary-btn { width: 100%; padding: 12px; background: #2481cc; color: white; border: none; border-radius: 10px; font-weight: 600; font-size: 15px; cursor: pointer; }
-        .primary-btn:disabled { opacity: 0.7; cursor: not-allowed; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .spin { animation: spin 1s linear infinite; }
-        .btn-group { display: flex; gap: 10px; }
-        .checkbox { display: none; }
-        .custom-checkbox { width: 24px; height: 24px; cursor: pointer; color: #2481cc; flex-shrink: 0; }
-        .custom-checkbox .checked-icon { display: none; }
-        .custom-checkbox .unchecked-icon { display: block; color: #999; }
-        input[type="checkbox"]:checked ~ .custom-checkbox .checked-icon, input[type="radio"]:checked ~ .custom-checkbox .checked-icon { display: block; }
-        input[type="checkbox"]:checked ~ .custom-checkbox .unchecked-icon, input[type="radio"]:checked ~ .custom-checkbox .unchecked-icon { display: none; }
-        
-        input[type=number]::-webkit-inner-spin-button, 
-        input[type=number]::-webkit-outer-spin-button { 
-            -webkit-appearance: none; 
-            margin: 0; 
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 0;
+            color: #1c1e21;
+            -webkit-user-select: none;
+            user-select: none;
         }
+
+        .action-bar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-sizing: border-box;
+            height: 48px;
+            background: #2481cc;
+            color: white;
+            padding: 0 10px;
+            gap: 10px;
+            display: flex;
+            align-items: center;
+        }
+
+        .navbar-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            color: white;
+            cursor: pointer;
+        }
+
+        .navbar-title {
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .tabs-container {
+            display: flex;
+            background: #fff;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .tab {
+            flex: 1;
+            text-align: center;
+            padding: 12px 0;
+            font-weight: 600;
+            color: #666;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: 0.2s;
+        }
+
+        .tab.active {
+            color: #2481cc;
+            background: #eef5fb;
+            border-bottom: 2px solid #2481cc;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 10px;
+            padding-bottom: 80px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .card {
+            background: #ffffff;
+            border-radius: 10px;
+            padding: 10px;
+            border: 1px solid #e0e0e0;
+            box-sizing: border-box;
+        }
+
+        .card h3 {
+            margin-top: 0;
+            font-size: 16px;
+            color: #1c1e21;
+            margin-bottom: 5px;
+        }
+
+        .item-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            background: #ffffff;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid #e0e0e0;
+        }
+
+        .list-card {
+            background: transparent;
+            border-radius: 0;
+            padding: 10px;
+            border: none;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .list-card:last-child {
+            border-bottom: none;
+        }
+
+        .list-title {
+            font-weight: 600;
+            font-size: 15px;
+            color: #1c1e21;
+        }
+
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            box-sizing: border-box;
+            font-family: inherit;
+            font-size: 15px;
+        }
+
+        .primary-btn {
+            width: 100%;
+            padding: 12px;
+            background: #2481cc;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+        }
+
+        .primary-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .spin {
+            animation: spin 1s linear infinite;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .checkbox {
+            display: none;
+        }
+
+        .custom-checkbox {
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            color: #2481cc;
+            flex-shrink: 0;
+        }
+
+        .custom-checkbox .checked-icon {
+            display: none;
+        }
+
+        .custom-checkbox .unchecked-icon {
+            display: block;
+            color: #999;
+        }
+
+        input[type="checkbox"]:checked~.custom-checkbox .checked-icon,
+        input[type="radio"]:checked~.custom-checkbox .checked-icon {
+            display: block;
+        }
+
+        input[type="checkbox"]:checked~.custom-checkbox .unchecked-icon,
+        input[type="radio"]:checked~.custom-checkbox .unchecked-icon {
+            display: none;
+        }
+
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
         input[type=number] {
             -moz-appearance: textfield;
         }
@@ -104,14 +279,20 @@
         }
     </style>
 </head>
+
 <body>
     <div class="action-bar">
         <div class="navbar-icon" onclick="window.location.href='/'">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-arrow-left-icon lucide-arrow-left"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                class="lucide lucide-arrow-left-icon lucide-arrow-left">
+                <path d="m12 19-7-7 7-7" />
+                <path d="M19 12H5" />
+            </svg>
         </div>
         <div class="navbar-title">BotZilla Dashboard</div>
     </div>
-    
+
     <div class="tabs-container">
         <!-- Add tab removed -->
         <div class="tab active" onclick="switchTab('allowed-shows-tab', event)">Allowed</div>
@@ -119,91 +300,145 @@
         <div class="tab" onclick="switchTab('custom-shows-tab', event)">Custom</div>
         <div class="tab" onclick="switchTab('settings-tab', event)">Setting</div>
     </div>
-    
+
     <div class="container">
         <!-- Add Show content removed -->
         <div id="allowed-shows-tab" class="tab-content active">
             <div class="card" style="margin-bottom: 10px;">
                 <h3 style="margin-bottom: 10px;">Language Access</h3>
-                
+
                 <div style="display: flex; flex-direction: column; gap: 10px;">
                     <!-- All Stories and Extra Episode -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
-                                <input type="checkbox" id="cb_all_stories" class="checkbox" {% if has_all %}checked{% endif %}>
+                                <input type="checkbox" id="cb_all_stories" class="checkbox" {% if has_all %}checked{%
+                                    endif %}>
                                 <div class="custom-checkbox">
-                                    <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-                                    <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
+                                    <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24"
+                                        height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect width="18" height="18" x="3" y="3" rx="2" />
+                                    </svg>
+                                    <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344" />
+                                        <path d="m9 11 3 3L22 4" />
+                                    </svg>
                                 </div>
                             </label>
-                            <label for="cb_all_stories" style="font-size: 15px; font-weight: 600; cursor: pointer;">All Stories</label>
+                            <label for="cb_all_stories" style="font-size: 15px; font-weight: 600; cursor: pointer;">All
+                                Stories</label>
                         </div>
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
-                                <input type="checkbox" id="cb_extra_episode" class="checkbox" {% if extra_episode %}checked{% endif %}>
+                                <input type="checkbox" id="cb_extra_episode" class="checkbox" {% if extra_episode
+                                    %}checked{% endif %}>
                                 <div class="custom-checkbox">
-                                    <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-                                    <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
+                                    <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24"
+                                        height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect width="18" height="18" x="3" y="3" rx="2" />
+                                    </svg>
+                                    <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344" />
+                                        <path d="m9 11 3 3L22 4" />
+                                    </svg>
                                 </div>
                             </label>
-                            <label for="cb_extra_episode" style="font-size: 15px; font-weight: 600; cursor: pointer;">Extra Episode</label>
+                            <label for="cb_extra_episode"
+                                style="font-size: 15px; font-weight: 600; cursor: pointer;">Extra Episode</label>
                         </div>
-                    </div>
-                    
-                    <div style="border-top: 1px solid #eee; margin: 5px 0;"></div>
-                    
-                    <!-- Language Grid -->
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <!-- First Cell: Custom Story -->
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
-                            <input type="checkbox" id="cb_custom_story" class="checkbox">
-                            <div class="custom-checkbox">
-                                <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-                                <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
-                            </div>
-                        </label>
-                        <label for="cb_custom_story" style="font-size: 15px; font-weight: 600; cursor: pointer;">Custom Story</label>
                     </div>
 
-                    {% set all_langs = ["Hindi", "English", "Tamil", "Telugu", "Kannada", "Bengali", "Malayalam", "French", "Spanish", "German", "Portuguese"] %}
-                    {% for lang in all_langs %}
+                    <div style="border-top: 1px solid #eee; margin: 5px 0;"></div>
+
+                    <!-- Language Grid -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <!-- First Cell: Custom Story -->
                         <div style="display: flex; align-items: center; gap: 10px;">
                             <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
-                                <input type="checkbox" id="cb_lang_{{ lang }}" class="checkbox lang-checkbox" value="{{ lang }}" {% if lang in allowed_langs %}checked{% endif %}>
+                                <input type="checkbox" id="cb_custom_story" class="checkbox">
                                 <div class="custom-checkbox">
-                                    <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-                                    <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
+                                    <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24"
+                                        height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect width="18" height="18" x="3" y="3" rx="2" />
+                                    </svg>
+                                    <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344" />
+                                        <path d="m9 11 3 3L22 4" />
+                                    </svg>
                                 </div>
                             </label>
-                            <label for="cb_lang_{{ lang }}" style="font-size: 15px; font-weight: 500; cursor: pointer;">{{ lang }}</label>
+                            <label for="cb_custom_story"
+                                style="font-size: 15px; font-weight: 600; cursor: pointer;">Custom Story</label>
                         </div>
-                    {% endfor %}
+
+                        {% set all_langs = ["Hindi", "English", "Tamil", "Telugu", "Kannada", "Bengali", "Malayalam",
+                        "French", "Spanish", "German", "Portuguese"] %}
+                        {% for lang in all_langs %}
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
+                                <input type="checkbox" id="cb_lang_{{ lang }}" class="checkbox lang-checkbox"
+                                    value="{{ lang }}" {% if lang in allowed_langs %}checked{% endif %}>
+                                <div class="custom-checkbox">
+                                    <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24"
+                                        height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect width="18" height="18" x="3" y="3" rx="2" />
+                                    </svg>
+                                    <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344" />
+                                        <path d="m9 11 3 3L22 4" />
+                                    </svg>
+                                </div>
+                            </label>
+                            <label for="cb_lang_{{ lang }}"
+                                style="font-size: 15px; font-weight: 500; cursor: pointer;">{{ lang }}</label>
+                        </div>
+                        {% endfor %}
                     </div>
                 </div>
             </div>
         </div>
         <div id="saved-shows-tab" class="tab-content">
-            <div style="font-size: 13px; color: #666; font-weight: 600; padding: 0 0 10px 0;">{{ saved_shows|length }} Saved Shows</div>
+            <div style="font-size: 13px; color: #666; font-weight: 600; padding: 0 0 10px 0;">{{ saved_shows|length }}
+                Saved Shows</div>
             <div class="item-list">
                 {% if saved_shows|length == 0 %}
-                    <div style="padding:10px;text-align:center;color:#666;">0 saved shows</div>
+                <div style="padding:10px;text-align:center;color:#666;">0 saved shows</div>
                 {% else %}
-                    {% for show in saved_shows %}
-                    <div class="list-card">
-                        <div style="flex: 1; overflow: hidden;">
-                            <div class="list-title">{{ show.title }}</div>
-                        </div>
-                        <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
-                            <input type="checkbox" class="checkbox saved-show-checkbox" value="{{ show.id }}" checked>
-                            <div class="custom-checkbox">
-                                <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-                                <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
-                            </div>
-                        </label>
+                {% for show in saved_shows %}
+                <div class="list-card">
+                    <div style="flex: 1; overflow: hidden;">
+                        <div class="list-title">{{ show.title }}</div>
                     </div>
-                    {% endfor %}
+                    <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
+                        <input type="checkbox" class="checkbox saved-show-checkbox" value="{{ show.id }}" checked>
+                        <div class="custom-checkbox">
+                            <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <rect width="18" height="18" x="3" y="3" rx="2" />
+                            </svg>
+                            <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344" />
+                                <path d="m9 11 3 3L22 4" />
+                            </svg>
+                        </div>
+                    </label>
+                </div>
+                {% endfor %}
                 {% endif %}
             </div>
         </div>
@@ -211,25 +446,44 @@
         <div id="custom-shows-tab" class="tab-content">
             <div class="card" style="margin-bottom: 10px;">
                 <h3 style="margin-bottom: 10px;">Custom Rules...</h3>
-                
+
                 <div style="margin-bottom: 10px;">
-                    <input type="text" id="customStoryName" readonly placeholder="Story Name" style="background: #f5f5f5; color: #333; cursor: not-allowed; width: 100%; height: 44px; padding: 10px 12px; border-radius: 8px; border: 1px solid #e0e0e0; box-sizing: border-box; font-family: inherit; font-size: 15px;">
-                    <pre id="customStoryError" style="color: #fa5252; font-size: 12px; margin-top: 5px; display: none; white-space: pre-wrap; word-wrap: break-word; background: #fff1f0; padding: 10px; border-radius: 5px; border: 1px solid #ffccc7;"></pre>
+                    <input type="text" id="customStoryName" readonly placeholder="Story Name"
+                        style="background: #f5f5f5; color: #333; cursor: not-allowed; width: 100%; height: 44px; padding: 10px 12px; border-radius: 8px; border: 1px solid #e0e0e0; box-sizing: border-box; font-family: inherit; font-size: 15px;">
+                    <pre id="customStoryError"
+                        style="color: #fa5252; font-size: 12px; margin-top: 5px; display: none; white-space: pre-wrap; word-wrap: break-word; background: #fff1f0; padding: 10px; border-radius: 5px; border: 1px solid #ffccc7;"></pre>
                 </div>
 
                 <div style="margin-bottom: 10px; position: relative;">
-                    <input type="text" id="customStoryUrl" placeholder="Enter story URL" style="width: 100%; height: 44px; padding: 10px 40px 10px 12px; border-radius: 8px; border: 1px solid #e0e0e0; box-sizing: border-box; font-family: inherit; font-size: 15px;" oninput="fetchCustomShowInfo(this.value)">
-                    <div id="customShowLoader" class="spin" style="display: none; position: absolute; right: 12px; top: 12px; width: 20px; height: 20px; color: #2481cc;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg>
+                    <input type="text" id="customStoryUrl" placeholder="Enter story URL"
+                        style="width: 100%; height: 44px; padding: 10px 40px 10px 12px; border-radius: 8px; border: 1px solid #e0e0e0; box-sizing: border-box; font-family: inherit; font-size: 15px;"
+                        oninput="fetchCustomShowInfo(this.value)">
+                    <div id="customShowLoader" class="spin"
+                        style="display: none; position: absolute; right: 12px; top: 12px; width: 20px; height: 20px; color: #2481cc;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 2v4" />
+                            <path d="m16.2 7.8 2.9-2.9" />
+                            <path d="M18 12h4" />
+                            <path d="m16.2 16.2 2.9 2.9" />
+                            <path d="M12 18v4" />
+                            <path d="m4.9 19.1 2.9-2.9" />
+                            <path d="M2 12h4" />
+                            <path d="m4.9 4.9 2.9 2.9" />
+                        </svg>
                     </div>
                 </div>
 
                 <div style="display: flex; gap: 10px; margin-bottom: 0;">
-                    <button id="btnAllowCustom" class="primary-btn" style="flex: 3; height: 44px; background: #2b8a3e; margin: 0; display: flex; align-items: center; justify-content: center;" onclick="addCustomShow('allow')" disabled>Always Allow</button>
-                    <button id="btnBlockCustom" class="primary-btn" style="flex: 2; height: 44px; background: #fa5252; margin: 0; display: flex; align-items: center; justify-content: center;" onclick="addCustomShow('block')" disabled>Block</button>
+                    <button id="btnAllowCustom" class="primary-btn"
+                        style="flex: 3; height: 44px; background: #2b8a3e; margin: 0; display: flex; align-items: center; justify-content: center;"
+                        onclick="addCustomShow('allow')" disabled>Always Allow</button>
+                    <button id="btnBlockCustom" class="primary-btn"
+                        style="flex: 2; height: 44px; background: #fa5252; margin: 0; display: flex; align-items: center; justify-content: center;"
+                        onclick="addCustomShow('block')" disabled>Block</button>
                 </div>
             </div>
-            
+
             <div id="custom-shows-list" class="item-list" style="margin-bottom: 20px;">
                 <!-- Custom rules will be loaded here via JS -->
             </div>
@@ -238,94 +492,155 @@
         <div id="settings-tab" class="tab-content">
             <div class="card" style="margin-bottom: 10px;">
                 <!-- User Profile -->
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #e0e0e0;">
-                    <img src="/api/avatars/{{ userid }}" style="width: 60px; height: 60px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-                    <div style="display: none; width: 60px; height: 60px; border-radius: 50%; background: #e0e0e0; color: #999; align-items: center; justify-content: center; flex-shrink: 0;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user-round-icon lucide-user-round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
+                <div
+                    style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #e0e0e0;">
+                    <img src="/api/avatars/{{ userid }}"
+                        style="width: 60px; height: 60px; border-radius: 50%; object-fit: cover; flex-shrink: 0;"
+                        onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                    <div
+                        style="display: none; width: 60px; height: 60px; border-radius: 50%; background: #e0e0e0; color: #999; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                            class="lucide lucide-user-round-icon lucide-user-round">
+                            <circle cx="12" cy="8" r="5" />
+                            <path d="M20 21a8 8 0 0 0-16 0" />
+                        </svg>
                     </div>
                     <div style="flex: 1; overflow: hidden;">
-                        <div style="font-weight: 700; font-size: 18px; color: #1c1e21; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ real_name }}</div>
+                        <div
+                            style="font-weight: 700; font-size: 18px; color: #1c1e21; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            {{ real_name }}</div>
                         <div style="font-size: 14px; color: #666; margin-top: 4px;">{{ userid }}</div>
-                        <div style="font-size: 14px; color: #666; margin-top: 2px;">{% if username %}@{{ username }}{% else %}(no username){% endif %}</div>
+                        <div style="font-size: 14px; color: #666; margin-top: 2px;">{% if username %}@{{ username }}{%
+                            else %}(no username){% endif %}</div>
                     </div>
                 </div>
 
                 <h3 style="margin-bottom: 10px;">Nick Name</h3>
-                <input type="text" id="userNameInput" value="{{ name }}" placeholder="{{ real_name }}" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0; box-sizing: border-box; margin-bottom: 10px; font-family: inherit; font-size: 15px;">
-                
+                <input type="text" id="userNameInput" value="{{ name }}" placeholder="{{ real_name }}"
+                    style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0; box-sizing: border-box; margin-bottom: 10px; font-family: inherit; font-size: 15px;">
+
                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
                     <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
                         <input type="checkbox" id="cb_set_cover" class="checkbox" {% if set_cover %}checked{% endif %}>
                         <div class="custom-checkbox">
-                            <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-                            <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
+                            <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <rect width="18" height="18" x="3" y="3" rx="2" />
+                            </svg>
+                            <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344" />
+                                <path d="m9 11 3 3L22 4" />
+                            </svg>
                         </div>
                     </label>
-                    <label for="cb_set_cover" style="font-size: 15px; font-weight: 500; cursor: pointer;">Set audio cover in episode</label>
+                    <label for="cb_set_cover" style="font-size: 15px; font-weight: 500; cursor: pointer;">Set audio
+                        cover in episode</label>
                 </div>
-                
+
                 <div style="display: flex; align-items: center; gap: 10px;">
                     <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
-                        <input type="checkbox" id="cb_set_artist" class="checkbox" {% if set_artist %}checked{% endif %}>
+                        <input type="checkbox" id="cb_set_artist" class="checkbox" {% if set_artist %}checked{% endif
+                            %}>
                         <div class="custom-checkbox">
-                            <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-                            <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
+                            <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <rect width="18" height="18" x="3" y="3" rx="2" />
+                            </svg>
+                            <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344" />
+                                <path d="m9 11 3 3L22 4" />
+                            </svg>
                         </div>
                     </label>
-                    <label for="cb_set_artist" style="font-size: 15px; font-weight: 500; cursor: pointer;">Set artist name in episode</label>
+                    <label for="cb_set_artist" style="font-size: 15px; font-weight: 500; cursor: pointer;">Set artist
+                        name in episode</label>
                 </div>
 
                 <div style="border-top: 1px solid #eee; margin: 10px 0;"></div>
-                
+
                 <h3 style="margin-bottom: 5px;">Validity</h3>
-                <div id="validityLabel" style="font-size: 14px; font-weight: 500; margin-bottom: 15px; color: {{ expiry_color }};">{{ expiry_text }}</div>
-                
+                <div id="validityLabel"
+                    style="font-size: 14px; font-weight: 500; margin-bottom: 15px; color: {{ expiry_color }};">{{
+                    expiry_text }}</div>
+
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                     {% set durations = [
-                        ("1 Hour", "1 Day"),
-                        ("1 Week", "1 Month"),
-                        ("1 Year", "Lifetime")
+                    ("1 Hour", "1 Day"),
+                    ("1 Week", "1 Month"),
+                    ("1 Year", "Lifetime")
                     ] %}
-                    
+
                     {% for d1, d2 in durations %}
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
-                                <input type="radio" name="durationRadio" value="{{ d1 }}" class="checkbox" onclick="document.getElementById('customDaysInput').value = '';">
-                                <div class="custom-checkbox" style="border-radius: 50%; overflow: hidden;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="unchecked-icon"><circle cx="12" cy="12" r="10"/></svg>
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="checked-icon"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg>
-                                </div>
-                            </label>
-                            <label style="font-size: 15px; font-weight: 500; cursor: pointer;" onclick="this.previousElementSibling.querySelector('input').click()">{{ d1 }}</label>
-                        </div>
-                        
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
-                                <input type="radio" name="durationRadio" value="{{ d2 }}" class="checkbox" onclick="document.getElementById('customDaysInput').value = '';">
-                                <div class="custom-checkbox" style="border-radius: 50%; overflow: hidden;">
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="unchecked-icon"><circle cx="12" cy="12" r="10"/></svg>
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="checked-icon"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg>
-                                </div>
-                            </label>
-                            <label style="font-size: 15px; font-weight: 500; cursor: pointer;" onclick="this.previousElementSibling.querySelector('input').click()">{{ d2 }}</label>
-                        </div>
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
+                            <input type="radio" name="durationRadio" value="{{ d1 }}" class="checkbox"
+                                onclick="document.getElementById('customDaysInput').value = '';">
+                            <div class="custom-checkbox" style="border-radius: 50%; overflow: hidden;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" class="unchecked-icon">
+                                    <circle cx="12" cy="12" r="10" />
+                                </svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" class="checked-icon">
+                                    <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+                                    <path d="m9 11 3 3L22 4" />
+                                </svg>
+                            </div>
+                        </label>
+                        <label style="font-size: 15px; font-weight: 500; cursor: pointer;"
+                            onclick="this.previousElementSibling.querySelector('input').click()">{{ d1 }}</label>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <label style="cursor: pointer; display: flex; align-items: center; margin: 0;">
+                            <input type="radio" name="durationRadio" value="{{ d2 }}" class="checkbox"
+                                onclick="document.getElementById('customDaysInput').value = '';">
+                            <div class="custom-checkbox" style="border-radius: 50%; overflow: hidden;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" class="unchecked-icon">
+                                    <circle cx="12" cy="12" r="10" />
+                                </svg>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" class="checked-icon">
+                                    <path d="M21.801 10A10 10 0 1 1 17 3.335" />
+                                    <path d="m9 11 3 3L22 4" />
+                                </svg>
+                            </div>
+                        </label>
+                        <label style="font-size: 15px; font-weight: 500; cursor: pointer;"
+                            onclick="this.previousElementSibling.querySelector('input').click()">{{ d2 }}</label>
+                    </div>
                     {% endfor %}
                 </div>
-                
+
                 <div style="margin-top: 15px;">
-                    <label style="font-size: 14px; font-weight: 500; display: block; margin-bottom: 5px;">Or enter custom days...</label>
-                    <input type="number" id="customDaysInput" placeholder="Enter number of days" min="1" 
-                           style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 14px; outline: none; transition: border-color 0.2s;"
-                           onfocus="this.style.borderColor='#2481cc'; document.querySelectorAll('input[name=\'durationRadio\']').forEach(r => r.checked = false);"
-                           onblur="this.style.borderColor='#ddd';">
+                    <label style="font-size: 14px; font-weight: 500; display: block; margin-bottom: 5px;">Or enter
+                        custom days...</label>
+                    <input type="number" id="customDaysInput" placeholder="Enter number of days" min="1"
+                        style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 14px; outline: none; transition: border-color 0.2s;"
+                        onfocus="this.style.borderColor='#2481cc'; document.querySelectorAll('input[name=\'durationRadio\']').forEach(r => r.checked = false);"
+                        onblur="this.style.borderColor='#ddd';">
                 </div>
             </div>
         </div>
     </div>
 
-    <div id="bottomBar" style="position: fixed; bottom: 0; left: 0; width: 100%; background: #ffffff; border-top: 1px solid #e0e0e0; padding: 10px; box-sizing: border-box; display: flex; justify-content: center; z-index: 1000;">
+    <div id="bottomBar"
+        style="position: fixed; bottom: 0; left: 0; width: 100%; background: #ffffff; border-top: 1px solid #e0e0e0; padding: 10px; box-sizing: border-box; display: flex; justify-content: center; z-index: 1000;">
         <div style="width: 100%; max-width: 800px;">
-            <button id="updateBtn" class="primary-btn" onclick="updateAll()" disabled style="opacity: 0.5; cursor: not-allowed;">Update</button>
+            <button id="updateBtn" class="primary-btn" onclick="updateAll()" disabled
+                style="opacity: 0.5; cursor: not-allowed;">Update</button>
         </div>
     </div>
 
@@ -376,7 +691,7 @@
             const errorLabel = document.getElementById('customStoryError');
             const btnAllow = document.getElementById('btnAllowCustom');
             const btnBlock = document.getElementById('btnBlockCustom');
-            
+
             if (!url || url.trim() === '') {
                 loader.style.display = 'none';
                 nameInput.value = '';
@@ -432,8 +747,8 @@
 
             fetch('/api/buyers/{{ userid }}/custom_rules', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({show_id: currentCustomShowId, action: action})
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ show_id: currentCustomShowId, action: action })
             }).then(r => r.json()).then(res => {
                 if (res.success) {
                     document.getElementById('customStoryUrl').value = '';
@@ -488,8 +803,8 @@
             if (!itemToDeleteId) return;
             fetch('/api/buyers/{{ userid }}/custom_rules', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({show_id: itemToDeleteId, action: 'remove'})
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ show_id: itemToDeleteId, action: 'remove' })
             }).then(r => r.json()).then(res => {
                 hideDeletePopup();
                 if (res.success) loadCustomShows();
@@ -504,11 +819,11 @@
                 btnElement.style.color = '#2481cc';
                 btnElement.style.pointerEvents = 'none';
             }
-            
+
             fetch('/api/buyers/{{ userid }}/custom_rules', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({show_id: showId, action: newAction})
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ show_id: showId, action: newAction })
             }).then(r => r.json()).then(res => {
                 if (res.success) loadCustomShows();
             });
@@ -516,16 +831,41 @@
 
         window.openDropdowns = new Set();
         function toggleCustomDropdown(showId) {
-            const content = document.getElementById('dropdown-' + showId);
-            const icon = document.getElementById('icon-' + showId);
-            if (content.style.display === 'none') {
-                content.style.display = 'block';
-                icon.style.transform = 'rotate(180deg)';
+            const isCurrentlyOpen = window.openDropdowns.has(showId);
+
+            window.openDropdowns.forEach(id => {
+                const c = document.getElementById('dropdown-' + id);
+                const i = document.getElementById('icon-' + id);
+                const card = document.getElementById('card-' + id);
+                if (c) c.style.display = 'none';
+                if (i) i.style.transform = 'rotate(0deg)';
+                if (card) {
+                    card.style.background = '#ffffff';
+                    card.style.margin = '0';
+                    card.style.borderRadius = '0';
+                    card.style.boxShadow = 'none';
+                    card.style.border = 'none';
+                    card.style.borderBottom = '1px solid #eee';
+                    card.style.borderLeft = card.dataset.indicator;
+                }
+            });
+            window.openDropdowns.clear();
+
+            if (!isCurrentlyOpen) {
+                const c = document.getElementById('dropdown-' + showId);
+                const i = document.getElementById('icon-' + showId);
+                const card = document.getElementById('card-' + showId);
+                if (c) c.style.display = 'block';
+                if (i) i.style.transform = 'rotate(180deg)';
+                if (card) {
+                    card.style.background = '#f8fafd';
+                    card.style.margin = '5px 0';
+                    card.style.borderRadius = '8px';
+                    card.style.boxShadow = '0 2px 8px rgba(0,0,0,0.05)';
+                    card.style.border = '1px solid #e1e8ed';
+                    card.style.borderLeft = card.dataset.indicator;
+                }
                 window.openDropdowns.add(showId);
-            } else {
-                content.style.display = 'none';
-                icon.style.transform = 'rotate(0deg)';
-                window.openDropdowns.delete(showId);
             }
         }
 
@@ -533,8 +873,8 @@
             checkboxElement.disabled = true;
             fetch('/api/buyers/{{ userid }}/custom_rules', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({show_id: showId, action: 'set_extra_ep', extra_ep: checkboxElement.checked})
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ show_id: showId, action: 'set_extra_ep', extra_ep: checkboxElement.checked })
             }).then(r => r.json()).then(res => {
                 if (res.success) loadCustomShows();
             });
@@ -553,25 +893,34 @@
                         let html = '';
                         rules.forEach(rule => {
                             const isAllow = rule.type === 'allow';
-                            const bgColor = isAllow ? '#eef7ee' : '#ffeeee';
-                            const blockText = !isAllow ? `<span style="color: #fa5252; font-size: 11px; font-weight: 600; padding: 2px 6px; background: #fff0f0; border-radius: 4px;">Blocked Story</span>` : '';
-                            const extraEpText = rule.extra_ep ? `<span style="color: #2b8a3e; font-size: 11px; font-weight: 600; padding: 2px 6px; background: #eef7ee; border-radius: 4px;">Extra Episodes Allowed</span>` : `<span style="color: #fa5252; font-size: 11px; font-weight: 600; padding: 2px 6px; background: #fff0f0; border-radius: 4px;">Extra Episode Not Allowed</span>`;
+                            const blockText = !isAllow ? `<span style="color: #fa5252; font-size: 11px; font-weight: 600;">Blocked Story</span>` : '';
+                            const extraEpText = rule.extra_ep ? `<span style="color: #2b8a3e; font-size: 11px; font-weight: 600;">Extra Episodes Allowed</span>` : `<span style="color: #fa5252; font-size: 11px; font-weight: 600;">Extra Episode Not Allowed</span>`;
                             const labelsHtml = `
-                                <div style="display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap;">
+                                <div style="display: flex; gap: 6px; margin-top: 2px; flex-wrap: wrap; align-items: center;">
                                     ${blockText}
+                                    ${blockText && extraEpText ? '<span style="color: #ccc; font-size: 10px;">|</span>' : ''}
                                     ${extraEpText}
                                 </div>
                             `;
 
                             const nextAction = isAllow ? 'block' : 'allow';
                             const nextActionLabel = isAllow ? 'Block Story' : 'Allow Story';
-                            
+
                             const isDropdownOpen = window.openDropdowns && window.openDropdowns.has(rule.show_id);
                             const dropdownDisplay = isDropdownOpen ? 'block' : 'none';
                             const iconTransform = isDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)';
 
+                            const indicatorBorder = `4px solid ${isAllow ? '#2b8a3e' : '#fa5252'}`;
+                            const cardBg = isDropdownOpen ? '#f8fafd' : '#ffffff';
+                            const cardMargin = isDropdownOpen ? 'margin: 5px 0;' : 'margin: 0;';
+                            const cardRadius = isDropdownOpen ? 'border-radius: 8px;' : 'border-radius: 0;';
+                            const cardShadow = isDropdownOpen ? 'box-shadow: 0 2px 8px rgba(0,0,0,0.05);' : 'box-shadow: none;';
+                            const cardBorder = isDropdownOpen ? 'border: 1px solid #e1e8ed;' : 'border-bottom: 1px solid #eee; border-top: none; border-right: none;';
+
+                            const allowBlockColor = isAllow ? '#fa5252' : '#2481cc';
+
                             html += `
-                            <div class="list-card" style="background: ${bgColor}; border-bottom: 1px solid #ffffff; padding: 12px; display: flex; flex-direction: column; text-align: left; align-items: stretch;">
+                            <div id="card-${rule.show_id}" data-indicator="${indicatorBorder}" class="list-card" style="background: ${cardBg}; ${cardMargin} ${cardRadius} ${cardShadow} ${cardBorder} border-left: ${indicatorBorder}; padding: 12px; display: flex; flex-direction: column; text-align: left; align-items: stretch; transition: all 0.2s;">
                                 <div style="display: flex; align-items: flex-start; justify-content: space-between; text-align: left; cursor: pointer;" onclick="toggleCustomDropdown('${rule.show_id}')">
                                     <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding-right: 10px; text-align: left;">
                                         <div class="list-title" style="white-space: normal; word-break: break-word; font-weight: 600; line-height: 1.3; text-align: left;">${rule.title}</div>
@@ -583,19 +932,19 @@
                                 </div>
                                 <div id="dropdown-${rule.show_id}" style="display: ${dropdownDisplay}; margin-top: 12px; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 12px;">
                                     <div style="display: flex; gap: 8px; align-items: center; justify-content: space-between; flex-wrap: nowrap;">
-                                        <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin: 0;">
+                                        <label style="cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; flex: 1; margin: 0; background: #f0f2f5; padding: 8px 0; border-radius: 6px;">
                                             <input type="checkbox" class="checkbox" ${rule.extra_ep ? 'checked' : ''} onchange="setExtraEpCustom('${rule.show_id}', this)">
-                                            <div class="custom-checkbox">
-                                                <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
-                                                <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
+                                            <div class="custom-checkbox" style="width: 18px; height: 18px;">
+                                                <svg class="unchecked-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>
+                                                <svg class="checked-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10.656V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h12.344"/><path d="m9 11 3 3L22 4"/></svg>
                                             </div>
-                                            <span style="font-size: 14px; font-weight: 600; white-space: nowrap;">Extra Ep</span>
+                                            <span style="font-size: 13px; font-weight: 600; white-space: nowrap; color: #1c1e21;">Extra Episode</span>
                                         </label>
                                         
-                                        <button onclick="toggleCustomRule('${rule.show_id}', '${nextAction}', this)" style="flex: 1; padding: 8px; border: none; border-radius: 6px; background: ${isAllow ? '#fa5252' : '#2b8a3e'}; color: white; font-weight: 600; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 13px; margin: 0; white-space: nowrap;">
+                                        <button onclick="toggleCustomRule('${rule.show_id}', '${nextAction}', this)" style="flex: 1; padding: 8px 0; border: none; border-radius: 6px; background: ${allowBlockColor}; color: white; font-weight: 600; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 13px; margin: 0; white-space: nowrap;">
                                             ${nextActionLabel}
                                         </button>
-                                        <button onclick="showDeletePopup('${rule.show_id}', '${rule.title.replace(/'/g, "\\'")}')" style="flex: 1; padding: 8px; border: none; border-radius: 6px; background: #1c1e21; color: white; font-weight: 600; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 13px; margin: 0; white-space: nowrap;">
+                                        <button onclick="showDeletePopup('${rule.show_id}', '${rule.title.replace(/'/g, "\\'")}')" style="flex: 1; padding: 8px 0; border: none; border-radius: 6px; background: #f0f2f5; color: #1c1e21; font-weight: 600; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 13px; margin: 0; white-space: nowrap;">
                                             Delete
                                         </button>
                                     </div>
@@ -615,21 +964,21 @@
                     document.getElementById('cb_all_stories').checked = info.has_all;
                     document.getElementById('cb_extra_episode').checked = info.extra_episode;
                     document.getElementById('cb_custom_story').checked = info.custom_story;
-                    
+
                     document.querySelectorAll('.lang-checkbox').forEach(cb => {
                         cb.checked = info.allowed_langs.includes(cb.value);
                     });
-                    
+
                     document.getElementById('cb_set_cover').checked = info.set_cover;
                     document.getElementById('cb_set_artist').checked = info.set_artist;
-                    
+
                     const lbl = document.getElementById('validityLabel');
                     lbl.textContent = info.expiry_text;
                     lbl.style.color = info.expiry_color;
-                    
+
                     document.querySelectorAll('input[name="durationRadio"]').forEach(r => r.checked = false);
                     document.getElementById('customDaysInput').value = '';
-                    
+
                     saveInitialState();
                     checkChanges();
                 });
@@ -640,7 +989,7 @@
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             event.currentTarget.classList.add('active');
             document.getElementById(tabId).classList.add('active');
-            
+
             if (tabId === 'saved-shows-tab') {
                 loadSavedShows();
             } else if (tabId === 'custom-shows-tab') {
@@ -648,7 +997,7 @@
             } else if (tabId === 'allowed-shows-tab' || tabId === 'settings-tab') {
                 loadBuyerInfo();
             }
-            
+
             checkChanges();
         }
 
@@ -656,7 +1005,7 @@
             const btn = document.getElementById('updateBtn');
             btn.disabled = true;
             btn.innerHTML = 'Updating';
-            
+
             const checkboxes = document.querySelectorAll('.lang-checkbox');
             let newLangs = [];
             checkboxes.forEach(cb => {
@@ -664,7 +1013,7 @@
             });
             const hasAll = document.getElementById('cb_all_stories').checked;
             const extraEpisode = document.getElementById('cb_extra_episode').checked;
-            
+
             const userName = document.getElementById('userNameInput').value;
             const durationEl = document.querySelector('input[name="durationRadio"]:checked');
             const customDays = document.getElementById('customDaysInput').value;
@@ -679,7 +1028,7 @@
 
             fetch('/api/buyers/{{ userid }}/update_all', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     langs: newLangs,
                     has_all: hasAll,
@@ -692,20 +1041,20 @@
                 })
             }).then(r => r.json()).then(res => {
                 btn.disabled = false;
-                if(res.success) {
+                if (res.success) {
                     btn.innerHTML = 'Updated';
                     btn.style.backgroundColor = '#2b8a3e';
-                    
+
                     if (res.expiry_text) {
                         const lbl = document.getElementById('validityLabel');
                         lbl.textContent = res.expiry_text;
                         lbl.style.color = res.expiry_color;
                         if (durationEl) durationEl.checked = false;
                     }
-                    
+
                     saveInitialState();
                     checkChanges();
-                    
+
                     setTimeout(() => {
                         btn.innerHTML = 'Update';
                         btn.style.backgroundColor = '#2481cc';
@@ -720,7 +1069,7 @@
                 alert('Error updating shows');
             });
         }
-        
+
         let initialState = {};
 
         function saveInitialState() {
@@ -760,7 +1109,7 @@
                 const currentExtraEpisode = document.getElementById('cb_extra_episode').checked;
                 const currentCustomStory = document.getElementById('cb_custom_story').checked;
                 const currentLangs = Array.from(document.querySelectorAll('.lang-checkbox')).map(cb => cb.checked);
-                
+
                 if (currentAllStories !== initialState.allStories) hasChanges = true;
                 if (currentExtraEpisode !== initialState.extraEpisode) hasChanges = true;
                 if (currentCustomStory !== initialState.customStory) hasChanges = true;
@@ -805,7 +1154,7 @@
                 el.addEventListener('input', checkChanges);
             });
 
-            document.addEventListener("keydown", function(e) {
+            document.addEventListener("keydown", function (e) {
                 if (e.target.type === "number" && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
                     e.preventDefault();
                 }
@@ -861,4 +1210,5 @@
         </div>
     </div>
 </body>
+
 </html>
