@@ -145,7 +145,7 @@ class PFMDownloader:
             await asyncio.sleep(3 * (attempt + 1))
         return None
 
-    async def get_detail(self, show_id, seq):
+    async def get_detail(self, show_id, seq, info_level="max"):
         custom_headers = {
             "version-name": "9.1.3",
             "platform-version": "29",
@@ -155,7 +155,7 @@ class PFMDownloader:
         
         data = await self._make_request(
             'GET',
-            f'{self.base}/v2/content_api/show.get_details?show_id={show_id}&curr_ptr={seq-1}&info_level=full',
+            f'{self.base}/v2/content_api/show.get_details?show_id={show_id}&curr_ptr={seq-1}&info_level={info_level}',
             headers=custom_headers
         )
         
@@ -169,7 +169,7 @@ class PFMDownloader:
                 }
         return data
 
-    async def get_show_info(self, show_id):
+    async def get_show_info(self, show_id, info_level="max"):
         custom_headers = {
             "version-name": "9.1.3",
             "platform-version": "29",
@@ -179,7 +179,7 @@ class PFMDownloader:
         
         details = await self._make_request(
             'GET',
-            f'{self.base}/v2/content_api/show.get_details?show_id={show_id}&curr_ptr=0&info_level=full',
+            f'{self.base}/v2/content_api/show.get_details?show_id={show_id}&curr_ptr=0&info_level={info_level}',
             headers=custom_headers
         )
         
@@ -338,7 +338,7 @@ class PFMDownloader:
             return result
         return None, None
 
-    async def download_episodes(self,show_id,seq,end,output_dir,progress_callback=None,cancel_flag=None,on_complete=None,on_start=None,quality="192", discovery_done=None):
+    async def download_episodes(self,show_id,seq,end,output_dir,progress_callback=None,cancel_flag=None,on_complete=None,on_start=None,quality="192", discovery_done=None, info_level="max"):
         total_target = end - seq + 1
         files=[]
         self.last_download_error = None
@@ -481,7 +481,7 @@ class PFMDownloader:
         while current_seq <= end:
             if cancel_flag and cancel_flag(): break
             
-            story_data = await self.get_detail(show_id, current_seq)
+            story_data = await self.get_detail(show_id, current_seq, info_level=info_level)
             if not story_data or story_data.get("status") != 1:
                 current_seq += 1
                 continue
