@@ -566,18 +566,27 @@ async def start(client, message):
             except:
                 validity_text = f"Your validity until\n{validity}\n\n"
 
+    db.cursor.execute('SELECT value FROM settings WHERE key = ?', (f"set_cover_{uid}",))
+    c_row = db.cursor.fetchone()
+    has_cover = True if uid in Config.OWNER_IDS else ((c_row[0] == "1") if c_row else False)
+    
+    db.cursor.execute('SELECT value FROM settings WHERE key = ?', (f"set_artist_{uid}",))
+    a_row = db.cursor.fetchone()
+    has_artist = True if uid in Config.OWNER_IDS else ((a_row[0] == "1") if a_row else False)
+
+    cmd_text = "/saved - Get Saved stories\n"
+    if has_cover:
+        cmd_text += "/set_cover - Set episode cover\n/d_cover - Delete episode cover\n"
+    if has_artist:
+        cmd_text += "/set_artist - Set episode artist\n/d_artist - Delete episode artist\n"
+    cmd_text += "/cancel - Stop active download\n/stop - Stop active download"
+
     await message.reply(
         f"Hey {name}\n\n"
         f"{validity_text}"
         "Send story link to get started\n\n"
         "Use below command to access bot\n"
-        "/saved - Get Saved stories\n"
-        "/set_cover - Set episode cover\n"
-        "/d_cover - Delete episode cover\n"
-        "/set_artist - Set episode artist\n"
-        "/d_artist - Delete episode artist\n"
-        "/cancel - Stop active download\n"
-        "/stop - Stop active download"
+        f"{cmd_text}"
     )
 
 @app.on_message(filters.command("debug") & auth_filter & ~filters.bot)
@@ -648,6 +657,12 @@ async def get_auth_cmd(client, message):
 
 @app.on_message(filters.command("set_cover") & auth_filter & ~filters.bot)
 async def set_cover(client, message):
+    uid = message.from_user.id
+    if uid not in Config.OWNER_IDS:
+        db.cursor.execute('SELECT value FROM settings WHERE key = ?', (f"set_cover_{uid}",))
+        c_row = db.cursor.fetchone()
+        if not c_row or c_row[0] != "1": return
+
     if not message.reply_to_message or not message.reply_to_message.photo:
         return await message.reply("Reply to an image...")
     path = os.path.join(THUMB_DIR, f"{message.from_user.id}.jpg")
@@ -656,7 +671,13 @@ async def set_cover(client, message):
 
 @app.on_message(filters.command("d_cover") & auth_filter & ~filters.bot)
 async def d_cover(client, message):
-    path = os.path.join(THUMB_DIR, f"{message.from_user.id}.jpg")
+    uid = message.from_user.id
+    if uid not in Config.OWNER_IDS:
+        db.cursor.execute('SELECT value FROM settings WHERE key = ?', (f"set_cover_{uid}",))
+        c_row = db.cursor.fetchone()
+        if not c_row or c_row[0] != "1": return
+
+    path = os.path.join(THUMB_DIR, f"{uid}.jpg")
     if os.path.exists(path):
         os.remove(path)
         await message.reply("Cover deleted successfully...")
@@ -665,6 +686,12 @@ async def d_cover(client, message):
 
 @app.on_message(filters.command("set_artist") & auth_filter & ~filters.bot)
 async def set_artist(client, message):
+    uid = message.from_user.id
+    if uid not in Config.OWNER_IDS:
+        db.cursor.execute('SELECT value FROM settings WHERE key = ?', (f"set_artist_{uid}",))
+        a_row = db.cursor.fetchone()
+        if not a_row or a_row[0] != "1": return
+
     if not message.reply_to_message or not message.reply_to_message.text:
         return await message.reply("Reply to a text msg...")
     
@@ -680,7 +707,13 @@ async def set_artist(client, message):
 
 @app.on_message(filters.command("d_artist") & auth_filter & ~filters.bot)
 async def d_artist(client, message):
-    path = os.path.join(ARTIST_DIR, f"{message.from_user.id}.txt")
+    uid = message.from_user.id
+    if uid not in Config.OWNER_IDS:
+        db.cursor.execute('SELECT value FROM settings WHERE key = ?', (f"set_artist_{uid}",))
+        a_row = db.cursor.fetchone()
+        if not a_row or a_row[0] != "1": return
+
+    path = os.path.join(ARTIST_DIR, f"{uid}.txt")
     if os.path.exists(path):
         os.remove(path)
         await message.reply("Artist deleted successfully...")
