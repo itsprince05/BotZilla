@@ -132,6 +132,12 @@
             text-align: center;
             font-weight: 500;
         }
+
+        @keyframes spin {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
     </style>
 </head>
 <body>
@@ -149,14 +155,56 @@
     <div class="container">
         <div class="card">
             <h3>Authentication Required</h3>
-            {% if error %}
-            <div class="error">{{ error }}</div>
-            {% endif %}
-            <form method="POST" style="display: flex; flex-direction: column; gap: 15px; margin: 0;">
-                <input type="password" name="password" placeholder="Enter Password" required>
-                <button type="submit" class="primary-btn">LOGIN</button>
+            <div id="error-msg" class="error" style="display: {% if error %}block{% else %}none{% endif %};">{{ error if error else '' }}</div>
+            <form id="login-form" style="display: flex; flex-direction: column; gap: 15px; margin: 0;">
+                <input type="password" id="password" name="password" placeholder="Enter Password" required>
+                <button type="submit" id="login-btn" class="primary-btn">LOGIN</button>
             </form>
         </div>
     </div>
+    
+    <script>
+        document.getElementById('login-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const pwd = document.getElementById('password').value;
+            const btn = document.getElementById('login-btn');
+            const errorMsg = document.getElementById('error-msg');
+            
+            btn.disabled = true;
+            btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite; vertical-align: middle;"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg>`;
+            btn.style.opacity = '0.7';
+            btn.style.cursor = 'not-allowed';
+            errorMsg.style.display = 'none';
+
+            fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ password: pwd })
+            })
+            .then(r => r.json())
+            .then(res => {
+                if (res.success) {
+                    window.location.href = '/';
+                } else {
+                    errorMsg.textContent = res.error || "Invalid Password";
+                    errorMsg.style.display = 'block';
+                    btn.disabled = false;
+                    btn.innerHTML = 'LOGIN';
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                }
+            })
+            .catch(err => {
+                errorMsg.textContent = "Connection Error";
+                errorMsg.style.display = 'block';
+                btn.disabled = false;
+                btn.innerHTML = 'LOGIN';
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+            });
+        });
+    </script>
 </body>
 </html>
