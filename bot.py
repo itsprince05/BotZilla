@@ -1009,7 +1009,7 @@ async def handle_messages(client, message):
                         logger.info(f"Aiogram Upload Start for Ep {seq}: {title}")
                         
                         if seq in msg_objs:
-                            try: await msg_objs[seq].edit(f"Uploading...\n\nEp {seq} - {title}")
+                            try: await msg_objs[seq].edit(f"Uploading...\n\n{title}")
                             except: pass
                             try: await client.send_chat_action(t_chat_id, enums.ChatAction.UPLOAD_AUDIO)
                             except: pass
@@ -1111,7 +1111,10 @@ async def handle_messages(client, message):
                 async def start_download_callback(seq, title):
                     await episode_lock.acquire()
                     try:
-                        msg = await client.send_message(t_chat_id, f"Downloading...\n\nEp {seq} - {title}")
+                        import re
+                        clean_title = re.sub(r'^(?:Ep|Episode|E)[\s\-.:,]*\d+[\s\-.:,]*', '', title, flags=re.IGNORECASE).strip()
+                        display_title = f"Ep {seq} - {clean_title}" if clean_title else f"Ep {seq}"
+                        msg = await client.send_message(t_chat_id, f"Downloading...\n\n{display_title}")
                         msg_objs[seq] = msg
                     except Exception as e:
                         logger.error(f"Failed to send start msg for Ep {seq}: {e}")
@@ -1155,7 +1158,11 @@ async def handle_messages(client, message):
                         else:
                             await t_msg.reply("Task Completed...")
                     else:
-                        await t_msg.reply("Process failed...\n\nNo episodes were processed...")
+                        error_msg = getattr(downloader, "last_download_error", None)
+                        if error_msg:
+                            await t_msg.reply(f"Process failed...\n\nNo episodes were processed...\n\nReason: {error_msg}")
+                        else:
+                            await t_msg.reply("Process failed...\n\nNo episodes were processed...")
                         
                 except Exception as e:
                     logger.error(f"Pipeline error: {e}", exc_info=True)
