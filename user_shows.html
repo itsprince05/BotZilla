@@ -514,6 +514,32 @@
             });
         }
 
+        window.openDropdowns = new Set();
+        function toggleCustomDropdown(showId) {
+            const content = document.getElementById('dropdown-' + showId);
+            const icon = document.getElementById('icon-' + showId);
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.style.transform = 'rotate(180deg)';
+                window.openDropdowns.add(showId);
+            } else {
+                content.style.display = 'none';
+                icon.style.transform = 'rotate(0deg)';
+                window.openDropdowns.delete(showId);
+            }
+        }
+
+        function setExtraEpCustom(showId, checkboxElement) {
+            checkboxElement.disabled = true;
+            fetch('/api/buyers/{{ userid }}/custom_rules', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({show_id: showId, action: 'set_extra_ep', extra_ep: checkboxElement.checked})
+            }).then(r => r.json()).then(res => {
+                if (res.success) loadCustomShows();
+            });
+        }
+
         function loadCustomShows() {
             fetch('/api/buyers/{{ userid }}/custom_rules')
                 .then(r => r.json())
@@ -528,21 +554,48 @@
                         rules.forEach(rule => {
                             const isAllow = rule.type === 'allow';
                             const bgColor = isAllow ? '#eef7ee' : '#ffeeee';
-                            const icon = isAllow ? 
-                                `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#2b8a3e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="10" x2="10" y1="15" y2="9"/><line x1="14" x2="14" y1="15" y2="9"/></svg>` : 
-                                `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fa5252" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"/><circle cx="12" cy="12" r="10"/></svg>`;
-                            const nextAction = isAllow ? 'block' : 'allow';
-                            html += `
-                            <div class="list-card" style="background: ${bgColor}; border-bottom: 1px solid #ffffff; height: 44px; padding: 0 10px;">
-                                <div style="flex: 1; overflow: hidden; display: flex; align-items: center; gap: 10px;">
-                                    <div class="list-title" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 44px;">${rule.title}</div>
+                            const blockText = !isAllow ? `<span style="color: #fa5252; font-size: 11px; font-weight: 600; padding: 2px 6px; background: #fff0f0; border-radius: 4px;">Blocked Story</span>` : '';
+                            const extraEpText = rule.extra_ep ? `<span style="color: #2b8a3e; font-size: 11px; font-weight: 600; padding: 2px 6px; background: #eef7ee; border-radius: 4px;">Extra Episodes Allowed</span>` : `<span style="color: #fa5252; font-size: 11px; font-weight: 600; padding: 2px 6px; background: #fff0f0; border-radius: 4px;">Extra Episode Not Allowed</span>`;
+                            const labelsHtml = `
+                                <div style="display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap;">
+                                    ${blockText}
+                                    ${extraEpText}
                                 </div>
-                                <div style="display: flex; align-items: center;">
-                                    <div style="cursor: pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; width: 44px; height: 44px;" onclick="toggleCustomRule('${rule.show_id}', '${nextAction}', this)">
-                                        ${icon}
+                            `;
+
+                            const nextAction = isAllow ? 'block' : 'allow';
+                            const nextActionLabel = isAllow ? 'Block Story' : 'Allow Story';
+                            
+                            const isDropdownOpen = window.openDropdowns && window.openDropdowns.has(rule.show_id);
+                            const dropdownDisplay = isDropdownOpen ? 'block' : 'none';
+                            const iconTransform = isDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)';
+
+                            html += `
+                            <div class="list-card" style="background: ${bgColor}; border-bottom: 1px solid #ffffff; padding: 12px; display: flex; flex-direction: column;">
+                                <div style="display: flex; align-items: flex-start; justify-content: space-between;">
+                                    <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding-right: 10px;">
+                                        <div class="list-title" style="white-space: normal; word-break: break-word; font-weight: 600; line-height: 1.3;">${rule.title}</div>
+                                        ${labelsHtml}
                                     </div>
-                                    <div style="cursor: pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; width: 44px; height: 44px; color: #fa5252;" onclick="showDeletePopup('${rule.show_id}', '${rule.title.replace(/'/g, "\\'")}')">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-trash2-icon lucide-trash-2"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                    <div style="cursor: pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; width: 32px; height: 32px; background: #fff; border-radius: 50%; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" onclick="toggleCustomDropdown('${rule.show_id}')">
+                                        <svg id="icon-${rule.show_id}" style="transition: transform 0.2s; transform: ${iconTransform};" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1c1e21" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down"><path d="m6 9 6 6 6-6"/></svg>
+                                    </div>
+                                </div>
+                                <div id="dropdown-${rule.show_id}" style="display: ${dropdownDisplay}; margin-top: 12px; border-top: 1px solid rgba(0,0,0,0.05); padding-top: 12px;">
+                                    
+                                    <label class="custom-checkbox" style="margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+                                        <input type="checkbox" ${rule.extra_ep ? 'checked' : ''} onchange="setExtraEpCustom('${rule.show_id}', this)">
+                                        <span class="checkmark"></span>
+                                        <span style="font-size: 14px; font-weight: 500;">Allow Extra Episodes</span>
+                                    </label>
+                                    
+                                    <div style="display: flex; gap: 10px;">
+                                        <button onclick="toggleCustomRule('${rule.show_id}', '${nextAction}', this)" style="flex: 1; padding: 10px; border: none; border-radius: 6px; background: ${isAllow ? '#fa5252' : '#2b8a3e'}; color: white; font-weight: 600; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 13px;">
+                                            ${nextActionLabel}
+                                        </button>
+                                        <button onclick="showDeletePopup('${rule.show_id}', '${rule.title.replace(/'/g, "\\'")}')" style="flex: 1; padding: 10px; border: none; border-radius: 6px; background: #1c1e21; color: white; font-weight: 600; cursor: pointer; display: flex; justify-content: center; align-items: center; font-size: 13px;">
+                                            Delete
+                                        </button>
                                     </div>
                                 </div>
                             </div>`;
