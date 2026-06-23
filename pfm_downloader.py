@@ -338,7 +338,7 @@ class PFMDownloader:
             return result
         return None, None
 
-    async def download_episodes(self,show_id,seq,end,output_dir,progress_callback=None,cancel_flag=None,on_complete=None,on_start=None,quality="192", discovery_done=None, info_level='max'):
+    async def download_episodes(self,show_id,seq,end,output_dir,progress_callback=None,cancel_flag=None,on_complete=None,on_start=None,quality="192", discovery_done=None, info_level='max', process_tracker=None):
         total_target = end - seq + 1
         files=[]
         self.last_download_error = None
@@ -430,6 +430,8 @@ class PFMDownloader:
                                         "-map", "0:a:0", "-vn", "-c:a", "copy", m4a
                                     )
                                     self.current_processes.append(proc)
+                                    if process_tracker is not None:
+                                        process_tracker.append(proc)
                                     try:
                                         await asyncio.wait_for(proc.wait(), timeout=300)
                                     except:
@@ -438,6 +440,8 @@ class PFMDownloader:
                                     finally:
                                         if proc in self.current_processes:
                                             self.current_processes.remove(proc)
+                                        if process_tracker is not None and proc in process_tracker:
+                                            process_tracker.remove(proc)
 
                                     if os.path.exists(m4a) and os.path.getsize(m4a) > 10000:
                                         dur = 0
