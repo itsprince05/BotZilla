@@ -155,14 +155,18 @@ class Database:
             SELECT s.show_id, s.title 
             FROM user_saves u
             JOIN stories s ON u.show_id = s.show_id
-            WHERE u.user_id = ?
+            WHERE u.user_id = ? AND s.show_id NOT IN (
+                SELECT sub_data FROM subscriptions WHERE user_id = ? AND sub_type = 'blocked_story'
+            )
             UNION
             SELECT s.show_id, s.title
             FROM subscriptions sub
             JOIN stories s ON sub.sub_data = s.show_id
-            WHERE sub.user_id = ? AND sub.sub_type = 'selected_story'
+            WHERE sub.user_id = ? AND sub.sub_type = 'selected_story' AND s.show_id NOT IN (
+                SELECT sub_data FROM subscriptions WHERE user_id = ? AND sub_type = 'blocked_story'
+            )
             ORDER BY 2 ASC
-        ''', (user_id, user_id))
+        ''', (user_id, user_id, user_id, user_id))
         return self.cursor.fetchall()
 
 
