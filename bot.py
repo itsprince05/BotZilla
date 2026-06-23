@@ -1311,25 +1311,6 @@ async def delsave_callback(client, callback_query):
     except: pass
 
 async def main():
-    import shutil
-    import platform
-    import subprocess
-    
-    if not shutil.which("ffmpeg"):
-        if platform.system() == "Linux":
-            logger.info("FFmpeg not found. Auto-installing via apt-get...")
-            try:
-                # Try without sudo first in case we are root, fallback to sudo
-                cmd = "apt-get update && apt-get install -y ffmpeg"
-                if os.geteuid() != 0:
-                    cmd = "sudo " + cmd
-                subprocess.run(cmd, shell=True, check=True)
-                logger.info("FFmpeg auto-installed successfully.")
-            except Exception as e:
-                logger.error(f"Failed to auto-install FFmpeg: {e}")
-        else:
-            logger.warning("FFmpeg not found! Please install it manually.")
-
     await app.start()
     logger.info("Bots started!")
     
