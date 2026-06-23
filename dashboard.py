@@ -1,5 +1,8 @@
 import os
-from flask import Flask, request, jsonify, render_template, send_file
+import random
+import string
+import time
+from flask import Flask, request, jsonify, render_template, send_file, session, redirect, url_for
 import logging
 import urllib.request
 import json
@@ -11,8 +14,38 @@ AVATARS_DIR = os.path.join(BOT_DIR, "avatars")
 os.makedirs(AVATARS_DIR, exist_ok=True)
 
 flask_app = Flask(__name__, template_folder=BOT_DIR)
+flask_app.secret_key = os.urandom(24)
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
+
+DASHBOARD_PASSWORD = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+
+def update_password():
+    global DASHBOARD_PASSWORD
+    DASHBOARD_PASSWORD = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+    return DASHBOARD_PASSWORD
+
+@flask_app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        pwd = request.form.get('password')
+        if pwd == DASHBOARD_PASSWORD:
+            session['logged_in'] = True
+            session['login_time'] = time.time()
+            return redirect(url_for('index'))
+        else:
+            return render_template('login.html', error="Invalid Password")
+    return render_template('login.html')
+
+@flask_app.before_request
+def require_login():
+    if request.endpoint in ['login', 'static']:
+        return
+    if not session.get('logged_in'):
+        return redirect(url_for('login'))
+    if time.time() - session.get('login_time', 0) > 3600:
+        session.clear()
+        return redirect(url_for('login'))
 
 @flask_app.route('/')
 def index():
