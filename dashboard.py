@@ -79,6 +79,12 @@ def user_page(userid):
     db.cursor.execute('SELECT 1 FROM subscriptions WHERE user_id = ? AND sub_type = "extra_episode"', (userid,))
     extra_episode = bool(db.cursor.fetchone())
     
+    db.cursor.execute('SELECT 1 FROM subscriptions WHERE user_id = ? AND sub_type = "custom_story"', (userid,))
+    custom_story = bool(db.cursor.fetchone())
+    
+    if not allowed_langs and not has_all:
+        custom_story = True
+    
     username = u_row[1] if u_row and u_row[1] else ""
     
     db.cursor.execute('''
@@ -124,7 +130,7 @@ def user_page(userid):
             expiry_text = "Lifetime validity"
             expiry_color = "#2b8a3e"
     
-    return render_template('user_shows.html', userid=str(userid), name=name, real_name=real_name, username=username, allowed_langs=allowed_langs, has_all=has_all, extra_episode=extra_episode, saved_shows=saved_shows, expiry_text=expiry_text, expiry_color=expiry_color, set_cover=False, set_artist=False)
+    return render_template('user_shows.html', userid=str(userid), name=name, real_name=real_name, username=username, allowed_langs=allowed_langs, has_all=has_all, extra_episode=extra_episode, custom_story=custom_story, saved_shows=saved_shows, expiry_text=expiry_text, expiry_color=expiry_color, set_cover=False, set_artist=False)
 
 @flask_app.route('/new_buyer/<userid>')
 def new_buyer_page(userid):
