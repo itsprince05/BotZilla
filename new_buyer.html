@@ -261,6 +261,8 @@
         }
         
         document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('cb_custom_story').checked = true;
+
             function checkAllowState() {
                 const hasStory = Array.from(document.querySelectorAll('.lang-checkbox, #cb_all_stories, #cb_extra_episode, #cb_custom_story')).some(cb => cb.checked);
                 const hasValidity = document.querySelector('input[name="durationRadio"]:checked') !== null || document.getElementById('customDaysInput').value.trim() !== '';
