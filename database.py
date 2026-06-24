@@ -199,6 +199,13 @@ class Database:
             self.cursor.execute('DELETE FROM subscriptions WHERE user_id = ?', (user_id,))
         self.conn.commit()
 
+    def delete_user_data(self, user_id):
+        self.cursor.execute('DELETE FROM users WHERE id = ?', (user_id,))
+        self.cursor.execute('DELETE FROM subscriptions WHERE user_id = ?', (user_id,))
+        self.cursor.execute('DELETE FROM user_saves WHERE user_id = ?', (user_id,))
+        self.conn.commit()
+
+
     def get_all_subscriptions(self):
         self.cursor.execute('SELECT user_id, username, sub_type, sub_data, expiry, is_trial, timestamp FROM subscriptions')
         return self.cursor.fetchall()
