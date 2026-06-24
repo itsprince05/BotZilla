@@ -474,7 +474,7 @@
                              onmouseleave="cancelLongPress(event)"
                              onclick="if(window.isLongPressing) { window.isLongPressing=false; return; } window.location.href='/user/${uid}'">
                             <div style="display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden;">
-                                <img src="/api/avatars/${uid}?_t=${data[uid].avatar_v || 0}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                                <img src="/api/avatars/${uid}?_t=${data.avatar_v || 0}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
                                 <div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: #eef5fb; color: #2481cc; align-items: center; justify-content: center; flex-shrink: 0;">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user-round-icon lucide-user-round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
                                 </div>
@@ -523,7 +523,7 @@
                         <div class="list-card" style="${bgStyle}; cursor: pointer;"
                              onclick="window.location.href='${isBuyer ? '/user/' + uid : '/new_buyer/' + uid}'">
                             <div style="display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden;">
-                                <img src="/api/avatars/${uid}?_t=${data[uid].avatar_v || 0}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                                <img src="/api/avatars/${uid}?_t=${userData.avatar_v || 0}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
                                 <div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: #eef5fb; color: #2481cc; align-items: center; justify-content: center; flex-shrink: 0;">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user-round-icon lucide-user-round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
                                 </div>
