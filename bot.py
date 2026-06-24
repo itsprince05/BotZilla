@@ -1151,7 +1151,12 @@ async def handle_messages(client, message):
                     if not filepath:
                         logger.error(f"Download failed upstream for Ep {seq}")
                         pipeline_state["failed"] += 1
+                        episode_lock.release()
                         semaphore.release()
+                        if seq in msg_objs:
+                            try: await msg_objs[seq].delete()
+                            except: pass
+                            del msg_objs[seq]
                         return
 
                     pipeline_state["status"] = f"Uploading Ep {seq}..."
