@@ -133,6 +133,9 @@ def is_allowed(update, show_id=None, language=None):
         chat = None
         chat_id = 0
         
+    if chat and hasattr(chat, "type") and getattr(chat.type, "name", "") == "CHANNEL":
+        return False, "Channels are not supported."
+        
     is_group = str(chat_id).startswith('-')
     if is_group and chat_id == getattr(Config, "ADMIN_GROUP", 0):
         return True, None
