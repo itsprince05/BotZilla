@@ -512,14 +512,7 @@
 
                         container.innerHTML += `
                         <div class="list-card" style="${bgStyle}; cursor: pointer;"
-                             oncontextmenu="event.preventDefault(); showDeletePopup('${uid}', 'user', '${name.replace(/'/g, "\\'")}'); return false;"
-                             ontouchstart="startLongPress(event, '${uid}', 'user', '${name.replace(/'/g, "\\'")}')" 
-                             ontouchend="cancelLongPress(event)" 
-                             ontouchmove="cancelLongPress(event)" 
-                             onmousedown="startLongPress(event, '${uid}', 'user', '${name.replace(/'/g, "\\'")}')" 
-                             onmouseup="cancelLongPress(event)" 
-                             onmouseleave="cancelLongPress(event)"
-                             onclick="if(window.isLongPressing) { window.isLongPressing=false; return; } window.location.href='${isBuyer ? '/user/' + uid : '/new_buyer/' + uid}'">
+                             onclick="window.location.href='${isBuyer ? '/user/' + uid : '/new_buyer/' + uid}'">
                             <div style="display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden;">
                                 <img src="/api/avatars/${uid}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
                                 <div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: #e0e0e0; color: #999; align-items: center; justify-content: center; flex-shrink: 0;">
