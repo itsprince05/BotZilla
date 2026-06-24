@@ -715,17 +715,14 @@ async def start(client, message):
     
     if not allowed:
         if not is_group:
-            await message.reply(f"Hey {name}\n\nContact Admin\n@Index_Guide")
-            
-        if msg == "Subscription Expired Renew it" and uid not in expired_notified:
-            expired_notified.add(uid)
-            try:
-                u_name_text = f"\n\n@{username}" if username else ""
-                exp_msg = f"Validity Expired...\n\n{name}\n\n`{uid}`{u_name_text}"
-                await client.send_message(Config.ADMIN_GROUP, exp_msg)
-            except Exception as e:
-                logger.error(f"Error sending expired msg to admin group: {e}")
+            if msg == "Subscription Expired Renew it":
+                await message.reply(f"Hey {name}\n\nYour validity has expired\n\nContact Admin\n@Index_Guide")
+            else:
+                await message.reply(f"Hey {name}\n\nContact Admin\n@Index_Guide")
         return
+
+    if is_group:
+        asyncio.create_task(download_group_avatar_bg(message.chat.id, client))
 
     logger.info(f"Start by {uid}")
 
