@@ -870,19 +870,7 @@ async def delete_cmd(client, message):
     if message.chat.id != Config.ADMIN_GROUP:
         return
     uid = message.from_user.id
-    
-    is_admin = False
-    if uid in Config.OWNER_IDS:
-        is_admin = True
-    else:
-        try:
-            member = await client.get_chat_member(message.chat.id, uid)
-            if member.status in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
-                is_admin = True
-        except:
-            pass
-            
-    if not is_admin:
+    if uid not in Config.OWNER_IDS:
         return await message.reply("Unauthorized Access...")
 
     parts = message.text.split()
@@ -1263,6 +1251,7 @@ async def handle_messages(client, message):
                 discovery_done_event = asyncio.Event()
                 
                 msg_objs = {}
+                locked_episodes = set()
                 episode_lock = asyncio.Lock()
                 
                 async def perform_upload(task_data):
@@ -1272,7 +1261,9 @@ async def handle_messages(client, message):
                     if not filepath:
                         logger.error(f"Download failed upstream for Ep {seq}")
                         pipeline_state["failed"] += 1
-                        episode_lock.release()
+                        if seq in locked_episodes:
+                            episode_lock.release()
+                            locked_episodes.remove(seq)
                         semaphore.release()
                         if seq in msg_objs:
                             try: await msg_objs[seq].delete()
@@ -1352,7 +1343,9 @@ async def handle_messages(client, message):
                             try: await msg_objs[seq].delete()
                             except: pass
                             del msg_objs[seq]
-                        episode_lock.release()
+                        if seq in locked_episodes:
+                            episode_lock.release()
+                            locked_episodes.remove(seq)
                         semaphore.release()
 
                 async def upload_worker():
@@ -1401,6 +1394,7 @@ async def handle_messages(client, message):
                     
                 async def start_download_callback(seq, title):
                     await episode_lock.acquire()
+                    locked_episodes.add(seq)
                     try:
                         import re
                         clean_title = re.sub(r'^(?:Ep|Episode|E)[\s\-.:,]*\d+[\s\-.:,]*', '', title, flags=re.IGNORECASE).strip()
@@ -1422,7 +1416,7 @@ async def handle_messages(client, message):
                         t_show_id, min(t_episodes), max(t_episodes), user_dl_dir,
                         progress_callback=discovery_callback, cancel_flag=lambda: cancel_flags.get(uid),
                         on_complete=download_complete_callback, on_start=start_download_callback,
-                        discovery_done=discovery_done_event, info_level=get_user_info_level(uid, t_show_id),
+                        discovery_done=discovery_done_event, info_level='full',
                         process_tracker=user_processes[uid]
                     )
                     
