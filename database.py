@@ -57,6 +57,14 @@ class Database:
             artist TEXT,
             PRIMARY KEY (show_id, seq)
         )''')
+        cursor.execute('''CREATE TABLE IF NOT EXISTS buyer_groups (
+            chat_id INTEGER,
+            chat_title TEXT,
+            chat_username TEXT,
+            user_id INTEGER,
+            last_used DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (chat_id, user_id)
+        )''')
         self.conn.commit()
         cursor.close()
         logger.info("SQLite Database initialized")
@@ -315,5 +323,26 @@ class Database:
             self.cursor.execute('INSERT OR REPLACE INTO stories (show_id, title, web_link) VALUES (?, ?, ?)',
                                (s['show_id'], s['title'], s['web_link']))
         self.conn.commit()
+
+    def update_buyer_group(self, chat_id, chat_title, chat_username, user_id):
+        self.cursor.execute('''INSERT INTO buyer_groups (chat_id, chat_title, chat_username, user_id)
+                               VALUES (?, ?, ?, ?)
+                               ON CONFLICT(chat_id, user_id) DO UPDATE SET 
+                               chat_title=excluded.chat_title, 
+                               chat_username=excluded.chat_username,
+                               last_used=CURRENT_TIMESTAMP''', 
+                            (chat_id, chat_title, chat_username, user_id))
+        self.conn.commit()
+
+    def get_all_buyer_groups(self):
+        self.cursor.execute('''SELECT chat_id, chat_title, chat_username, user_id FROM buyer_groups ORDER BY last_used DESC''')
+        rows = self.cursor.fetchall()
+        groups = {}
+        for r in rows:
+            cid, title, uname, uid = r
+            if cid not in groups:
+                groups[cid] = {"title": title, "username": uname, "buyers": []}
+            groups[cid]["buyers"].append(uid)
+        return groups
 
 db = Database()
