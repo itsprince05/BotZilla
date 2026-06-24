@@ -153,6 +153,11 @@ gen_state = {}
 user_processes = {}  # Per-user process tracking for cancel
 
 
+def is_download_active(uid):
+    """Check if a download is active for this user"""
+    return uid in active_downloads
+
+
 async def send_log(log_ch_key, text, photo=None):
     log_ch = db.get_setting(log_ch_key)
     if not log_ch:
@@ -349,7 +354,22 @@ async def update_cmd(client, message):
         
         # Save restart state
         with open("restart.txt", "w") as f:
-            f.write(str(message.chat.id))
+            f.write(f"{message.chat.id}|{m.id}|update")
+        
+        # Force-clear ALL user tasks before restart (os.execv kills finally blocks)
+        logger.info("Pre-restart cleanup: clearing all user states...")
+        for proc_uid, procs in user_processes.items():
+            for proc in procs:
+                try: proc.kill()
+                except: pass
+        active_downloads.clear()
+        user_queues.clear()
+        cancel_flags.clear()
+        user_processes.clear()
+        user_show.clear()
+        user_awaiting_range.clear()
+        user_is_all_download.clear()
+        gen_state.clear()
             
         # Restart the process
         stop_tunnel()
@@ -442,6 +462,48 @@ async def backup_cmd(client, message):
         if os.path.exists(zip_name):
             os.remove(zip_name)
 
+@app.on_message(filters.command("restart") & ~filters.bot)
+async def restart_cmd(client, message):
+    if message.chat.id != Config.ADMIN_GROUP:
+        return
+    uid = message.from_user.id
+    
+    is_admin = False
+    if uid in Config.OWNER_IDS:
+        is_admin = True
+    else:
+        try:
+            member = await client.get_chat_member(message.chat.id, uid)
+            if member.status in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
+                is_admin = True
+        except:
+            pass
+            
+    if not is_admin:
+        return await message.reply("Unauthorized Access...")
+        
+    m = await message.reply("Restarting the bot...")
+    
+    with open("restart.txt", "w") as f:
+        f.write(f"{message.chat.id}|{m.id}|restart")
+        
+    logger.info("Pre-restart cleanup: clearing all user states...")
+    for proc_uid, procs in user_processes.items():
+        for proc in procs:
+            try: proc.kill()
+            except: pass
+    active_downloads.clear()
+    user_queues.clear()
+    cancel_flags.clear()
+    user_processes.clear()
+    user_show.clear()
+    user_awaiting_range.clear()
+    user_is_all_download.clear()
+    gen_state.clear()
+        
+    stop_tunnel()
+    os.execv(sys.executable, [sys.executable] + sys.argv)
+
 @app.on_message(filters.command("restore") & ~filters.bot)
 async def restore_cmd(client, message):
     if message.chat.id != Config.ADMIN_GROUP:
@@ -468,6 +530,22 @@ async def restore_cmd(client, message):
         
         await m.edit("Data restored successfully...")
         await asyncio.sleep(1)
+        
+        # Force-clear ALL user tasks before restart (os.execv kills finally blocks)
+        logger.info("Pre-restart cleanup: clearing all user states...")
+        for proc_uid, procs in user_processes.items():
+            for proc in procs:
+                try: proc.kill()
+                except: pass
+        active_downloads.clear()
+        user_queues.clear()
+        cancel_flags.clear()
+        user_processes.clear()
+        user_show.clear()
+        user_awaiting_range.clear()
+        user_is_all_download.clear()
+        gen_state.clear()
+        
         stop_tunnel()
         os.execv(sys.executable, [sys.executable] + sys.argv)
     except Exception as e:
@@ -491,7 +569,8 @@ async def start(client, message):
             "BotZilla Downloader\n\n"
             "For Admins...\n"
             "/dashboard Dashboard URL\n"
-            "/backup Backup database\n\n"
+            "/backup Backup database\n"
+            "/restart Restart bot\n\n"
             "For Owner Only...\n"
             "/update Pull and restart\n"
             "/restore Restore database"
@@ -738,7 +817,7 @@ async def saved_cmd(client, message):
 async def cancel_cmd(client, message):
     uid = message.from_user.id
     logger.info(f"Stop/Cancel request by {uid}")
-    if uid in active_downloads:
+    if is_download_active(uid):
         cancel_flags[uid] = True
         
         # Kill only this user's active downloader subprocesses
@@ -757,6 +836,11 @@ async def cancel_cmd(client, message):
         
         await message.reply("Stopping process...")
     else:
+        # Force-clean any leftover ghost state just in case
+        active_downloads.pop(uid, None)
+        user_queues.pop(uid, None)
+        cancel_flags.pop(uid, None)
+        user_processes.pop(uid, None)
         await message.reply("No running task...")
 
 
@@ -815,11 +899,6 @@ async def handle_messages(client, message):
         
     # Check if it's a PocketFM link
     if "pocketfm" in text.lower():
-        if uid in active_downloads:
-            return await message.reply("Download already in progress\n\nIf you want to cancel or stop the process just send /stop")
-        if chat_id != uid and chat_id in active_downloads:
-            return await message.reply("Group download in progress\nPlease wait for the current download in this group to finish.")
-            
         show_id = None
         
         # 1. Try extracting entity_id or af_sub4 from complex parameters (AppsFlyer/OneLink)
@@ -977,7 +1056,7 @@ async def handle_messages(client, message):
         if uid not in user_queues:
             user_queues[uid] = []
 
-        if active_downloads.get(uid):
+        if is_download_active(uid):
             if len(user_queues[uid]) >= 2:
                 return await message.reply("Maximum 3 task...\n\nPlease wait for the running task to finish and try again...")
             else:
@@ -1232,11 +1311,12 @@ async def handle_messages(client, message):
                             downloader.last_debug_info[t_show_id] = []
                     
                     if cancel_flags.get(uid):
-                        user_queues[uid].clear()
+                        if uid in user_queues:
+                            user_queues[uid].clear()
                         await t_msg.reply("Process stopped and waiting list is cleared...")
                         break
                     elif successful_uploads > 0:
-                        if not user_queues[uid]:
+                        if not user_queues.get(uid):
                             await t_msg.reply("Task Completed...")
                             if task_counter > 1:
                                 await t_msg.reply("All Task Completed...")
@@ -1244,24 +1324,35 @@ async def handle_messages(client, message):
                             await t_msg.reply("Task Completed...")
                     else:
                         error_msg = getattr(downloader, "last_download_error", None)
-                        if error_msg and t_chat_id == Config.ADMIN_GROUP:
-                            await t_msg.reply(f"Process failed...\n\nNo episodes were processed...\n\nReason: {error_msg}")
-                        else:
-                            await t_msg.reply("Process failed...\n\nNo episodes were processed...")
-                            if error_msg:
-                                try:
-                                    await client.send_message(Config.ADMIN_GROUP, f"Download Failed for {t_msg.from_user.first_name} (`{uid}`)\n\nStory ID: `{t_show_id}`\nReason: {error_msg}")
-                                except: pass
+                        user_name = t_msg.from_user.first_name if t_msg.from_user else "Unknown"
+                        try:
+                            await client.send_message(Config.ADMIN_GROUP, f"Download Failed for {user_name} (`{uid}`)\n\nStory ID: `{t_show_id}`\nReason: {error_msg or 'Unknown Error'}")
+                        except: pass
                         
                 except Exception as e:
                     logger.error(f"Pipeline error: {e}", exc_info=True)
-                    await t_msg.reply(f"Error: {str(e)[:150]}")
+                    user_name = t_msg.from_user.first_name if t_msg.from_user else "Unknown"
+                    try:
+                        await client.send_message(Config.ADMIN_GROUP, f"Pipeline Error for {user_name} (`{uid}`)\n\nStory ID: `{t_show_id}`\nError: {str(e)[:500]}")
+                    except: pass
+                except BaseException as e:
+                    # Catches CancelledError, KeyboardInterrupt, SystemExit etc.
+                    logger.error(f"Pipeline killed: {type(e).__name__}: {e}")
+                    user_name = t_msg.from_user.first_name if t_msg.from_user else "Unknown"
+                    try:
+                        await client.send_message(Config.ADMIN_GROUP, f"Pipeline Killed for {user_name} (`{uid}`)\n\nStory ID: `{t_show_id}`\nException: {type(e).__name__}")
+                    except: pass
+                    break
+        except BaseException as e:
+            logger.error(f"Task loop killed: {type(e).__name__}: {e}")
         finally:
             active_downloads.pop(uid, None)
             if chat_id != uid:
                 active_downloads.pop(chat_id, None)
             cancel_flags.pop(uid, None)
             user_processes.pop(uid, None)
+            user_queues.pop(uid, None)
+            logger.info(f"Cleanup complete for user {uid}")
     elif len(text) >= 3 and not text.startswith('/'):
         results = db.search_stories(text)
         if results:
@@ -1401,15 +1492,56 @@ async def main():
     logger.info("Bots started!")
     
     restart_msg = None
+    restart_action = "update"
     # Check for restart state
     if os.path.exists("restart.txt"):
         try:
             with open("restart.txt", "r") as f:
-                chat_id = int(f.read().strip())
-            restart_msg = await app.send_message(chat_id, "Bot is running and updated successfully...")
+                content = f.read().strip().split("|")
+                chat_id = int(content[0])
+                msg_id = int(content[1]) if len(content) > 1 else None
+                restart_action = content[2] if len(content) > 2 else "update"
+                
+            success_text = "Bot restarted successfully..." if restart_action == "restart" else "Bot is running and updated successfully..."
+            
+            if msg_id:
+                try:
+                    restart_msg = await app.edit_message_text(chat_id, msg_id, success_text)
+                except:
+                    restart_msg = await app.send_message(chat_id, success_text)
+            else:
+                restart_msg = await app.send_message(chat_id, success_text)
             os.remove("restart.txt")
         except Exception as e:
             logger.error(f"Failed to send restart message: {e}")
+
+    # --- Startup Cleanup: Clear ALL user tasks on restart/update ---
+    logger.info("Performing startup cleanup — clearing all user tasks...")
+    user_queues.clear()
+    active_downloads.clear()
+    cancel_flags.clear()
+    user_processes.clear()
+    user_show.clear()
+    user_awaiting_range.clear()
+    user_is_all_download.clear()
+    gen_state.clear()
+    
+    # Clean up any leftover download files from previous session
+    download_dir = Config.DOWNLOAD_DIR
+    if os.path.exists(download_dir):
+        for item in os.listdir(download_dir):
+            item_path = os.path.join(download_dir, item)
+            if item.startswith('.'):
+                continue
+            try:
+                if os.path.isdir(item_path):
+                    shutil.rmtree(item_path, ignore_errors=True)
+                elif os.path.isfile(item_path):
+                    os.remove(item_path)
+            except Exception as e:
+                logger.error(f"Startup cleanup error for {item}: {e}")
+    logger.info("Startup cleanup completed — all tasks and temp files cleared.")
+    # --- End Startup Cleanup ---
             
     # Start Cloudflare Tunnel and Flask Dashboard
     global dashboard_port
@@ -1429,7 +1561,9 @@ async def main():
     if tunnel_url:
         dashboard_msg = f"Dashboard URL...\n\n`{dashboard.DASHBOARD_PASSWORD}`\n\n{tunnel_url}"
         if restart_msg:
-            try: await restart_msg.edit(f"Bot is running and updated successfully...\n\n{dashboard_msg}")
+            try: 
+                success_text = "Bot restarted successfully..." if restart_action == "restart" else "Bot is running and updated successfully..."
+                await restart_msg.edit(f"{success_text}\n\n{dashboard_msg}")
             except: pass
         else:
             try: await app.send_message(Config.ADMIN_GROUP, dashboard_msg)
