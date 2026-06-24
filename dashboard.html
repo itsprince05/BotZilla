@@ -485,7 +485,7 @@
                         </div>
                     `;
                     });
-                }).finally(() => { if (initialLoadsCompleted < 2) checkGlobalLoad(); });
+                }).finally(() => { checkGlobalLoad(); });
         }
 
         function loadUsers() {
@@ -534,7 +534,7 @@
                         </div>
                     `;
                     });
-                }).finally(() => { if (initialLoadsCompleted < 2) checkGlobalLoad(); });
+                }).finally(() => { checkGlobalLoad(); });
         }
 
         window.longPressTimeout = null;
@@ -687,7 +687,7 @@
                             </div>
                         `;
                     });
-                }).finally(() => { if (initialLoadsCompleted < 3) checkGlobalLoad(); });
+                }).finally(() => { checkGlobalLoad(); });
         }
 
         loadBuyers();
