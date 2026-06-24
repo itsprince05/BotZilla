@@ -813,6 +813,58 @@ async def saved_cmd(client, message):
         ])
     await message.reply("Your Saved Stories...", reply_markup=InlineKeyboardMarkup(buttons))
 
+@app.on_message(filters.command("clear") & ~filters.bot)
+async def clear_cmd(client, message):
+    if message.chat.id != Config.ADMIN_GROUP:
+        return
+    uid = message.from_user.id
+    
+    is_admin = False
+    if uid in Config.OWNER_IDS:
+        is_admin = True
+    else:
+        try:
+            member = await client.get_chat_member(message.chat.id, uid)
+            if member.status in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
+                is_admin = True
+        except:
+            pass
+            
+    if not is_admin:
+        return await message.reply("Unauthorized Access...")
+
+    parts = message.text.split()
+    if len(parts) < 2:
+        return await message.reply("Please provide a User ID. Format: `/clear <userid>`")
+        
+    try:
+        target_uid = int(parts[1])
+    except:
+        return await message.reply("Invalid User ID.")
+        
+    # Trigger cancel for any running background tasks
+    cancel_flags[target_uid] = True
+    
+    # Kill any active ffmpeg subprocesses
+    try:
+        procs = user_processes.get(target_uid, [])
+        for proc in procs:
+            try: proc.kill()
+            except: pass
+        user_processes.pop(target_uid, None)
+    except:
+        pass
+        
+    # Force-clear all state dicts for this user
+    active_downloads.pop(target_uid, None)
+    user_queues.pop(target_uid, None)
+    user_show.pop(target_uid, None)
+    user_awaiting_range.pop(target_uid, None)
+    user_is_all_download.pop(target_uid, None)
+    gen_state.pop(target_uid, None)
+    
+    await message.reply(f"All ongoing tasks, waiting lists, and temporary states for user `{target_uid}` have been forcefully cleared.")
+
 @app.on_message(filters.command(["stop", "cancel"]) & auth_filter & ~filters.bot)
 async def cancel_cmd(client, message):
     uid = message.from_user.id
