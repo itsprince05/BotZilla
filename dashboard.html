@@ -362,6 +362,7 @@
         <div class="tabs-container">
             <div class="tab active" onclick="switchTab('buyers', event)">Buyers</div>
             <div class="tab" onclick="switchTab('users', event)">Users</div>
+            <div class="tab" onclick="switchTab('groups', event)">Groups</div>
         </div>
 
         <div class="container">
@@ -381,6 +382,12 @@
                 </div>
                 <div id="usersCount" style="font-size: 13px; color: #666; font-weight: 600; padding: 0 0 10px 0;"></div>
                 <div class="item-list" id="usersTable"></div>
+            </div>
+
+            <!-- GROUPS TAB -->
+            <div id="groups" class="tab-content">
+                <div id="groupsCount" style="font-size: 13px; color: #666; font-weight: 600; padding: 0 0 10px 0;"></div>
+                <div class="item-list" id="groupsTable"></div>
             </div>
         </div>
     </div>
@@ -403,7 +410,7 @@
         let initialLoadsCompleted = 0;
         function checkGlobalLoad() {
             initialLoadsCompleted++;
-            if (initialLoadsCompleted >= 2) {
+            if (initialLoadsCompleted >= 3) {
                 const loader = document.getElementById('global-loader');
                 if (loader) loader.style.display = 'none';
             }
@@ -425,6 +432,7 @@
 
             if (tabId === 'buyers') loadBuyers();
             else if (tabId === 'users') loadUsers();
+            else if (tabId === 'groups') loadGroups();
         }
 
         // loadShows removed
@@ -628,8 +636,63 @@
                 });
         }
 
+        function loadGroups() {
+            fetch('/api/groups?_t=' + Date.now(), { cache: 'no-store' })
+                .then(r => r.json())
+                .then(groups => {
+                    const entries = Object.entries(groups);
+                    document.getElementById('groupsCount').textContent = entries.length + ' Groups';
+                    const container = document.getElementById('groupsTable');
+                    container.innerHTML = '';
+                    
+                    entries.forEach(([cid, data]) => {
+                        let buyersHtml = '';
+                        data.buyers.forEach(b => {
+                            const bName = (!b.name || b.name === 'Unknown') ? 'Unknown' : b.name;
+                            const bUname = b.username ? ` @${b.username}` : '';
+                            const titleColor = bName === 'Unknown' ? 'color: #999;' : 'color: #1c1e21;';
+                            const subColor = bName === 'Unknown' ? 'color: #bbb;' : 'color: #666;';
+                            buyersHtml += `
+                                <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px; cursor: pointer;" onclick="window.location.href='/user/${b.user_id}'">
+                                    <img src="/api/avatars/${b.user_id}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                                    <div style="display: none; width: 32px; height: 32px; border-radius: 50%; background: #e0e0e0; color: #999; align-items: center; justify-content: center; flex-shrink: 0;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user-round-icon lucide-user-round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
+                                    </div>
+                                    <div style="flex: 1; overflow: hidden;">
+                                        <div style="font-weight: 600; font-size: 14px; ${titleColor}">${bName}</div>
+                                        <div style="font-size: 12px; ${subColor}">${b.user_id}${bUname}</div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+
+                        const gName = data.title || 'Unknown Group';
+                        const gUname = data.username ? ` @${data.username}` : '';
+                        
+                        container.innerHTML += `
+                            <div class="list-card" style="display: block; cursor: default;">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div style="width: 40px; height: 40px; border-radius: 50%; background: #eef5fb; color: #2481cc; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users-round-icon lucide-users-round"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg>
+                                    </div>
+                                    <div style="flex: 1; overflow: hidden;">
+                                        <div class="list-title" style="color: #1c1e21;">${gName}</div>
+                                        <div class="list-subtitle" style="color: #666;">${cid}${gUname}</div>
+                                    </div>
+                                </div>
+                                <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #eee;">
+                                    <div style="font-size: 11px; font-weight: 700; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;">Buyers in Group</div>
+                                    ${buyersHtml}
+                                </div>
+                            </div>
+                        `;
+                    });
+                }).finally(() => { if (initialLoadsCompleted < 3) checkGlobalLoad(); });
+        }
+
         loadBuyers();
         loadUsers();
+        loadGroups();
     </script>
 </body>
 
