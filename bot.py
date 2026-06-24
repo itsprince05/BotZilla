@@ -374,13 +374,27 @@ def get_show_markup(user_id, show_id):
         [save_btn]
     ])
 
+group_avatars_cache = {}
+last_avatar_check = {}
+
 async def download_group_avatar_bg(chat_id, client):
+    import time
+    now = time.time()
+    if now - last_avatar_check.get(chat_id, 0) < 60:
+        return
+    last_avatar_check[chat_id] = now
+
     try:
+        chat = await client.get_chat(chat_id)
+        if not chat.photo: return
+        
+        file_id = chat.photo.big_file_id
+        if group_avatars_cache.get(chat_id) == file_id:
+            return
+            
         avatar_path = os.path.join("avatars", f"{chat_id}.jpg")
-        if not os.path.exists(avatar_path):
-            chat = await client.get_chat(chat_id)
-            if chat.photo:
-                await client.download_media(chat.photo.big_file_id, file_name=avatar_path)
+        await client.download_media(file_id, file_name=avatar_path)
+        group_avatars_cache[chat_id] = file_id
     except Exception as e:
         logger.error(f"Failed to download group avatar for {chat_id}: {e}")
 
