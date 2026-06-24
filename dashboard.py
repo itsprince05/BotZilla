@@ -700,6 +700,10 @@ def get_buyer_saved_shows(userid):
 def api_get_groups():
     groups_data = db.get_all_buyer_groups()
     result = {}
+    from datetime import datetime, timedelta, timezone
+    ist = timezone(timedelta(hours=5, minutes=30))
+    now = datetime.now(ist)
+    
     for cid, data in groups_data.items():
         buyers = []
         for uid in data["buyers"]:
@@ -711,7 +715,17 @@ def api_get_groups():
             
             name = crow[0] if crow else (urow[0] if urow else "Unknown")
             username = urow[1] if urow else ""
-            buyers.append({"user_id": uid, "name": name, "username": username})
+            
+            db.cursor.execute('SELECT expiry FROM subscriptions WHERE user_id = ? LIMIT 1', (uid,))
+            exp_row = db.cursor.fetchone()
+            is_expired = False
+            if exp_row and exp_row[0]:
+                try:
+                    if datetime.fromisoformat(exp_row[0]) < now:
+                        is_expired = True
+                except: pass
+                
+            buyers.append({"user_id": uid, "name": name, "username": username, "is_expired": is_expired})
             
         result[str(cid)] = {
             "title": data["title"],
