@@ -124,23 +124,19 @@ def is_allowed(update, show_id=None, language=None):
     
     # Extract chat_id from Message or CallbackQuery.message
     if hasattr(update, "chat") and update.chat:
-        chat_id = update.chat.id
+        chat = update.chat
+        chat_id = chat.id
     elif hasattr(update, "message") and update.message and update.message.chat:
-        chat_id = update.message.chat.id
+        chat = update.message.chat
+        chat_id = chat.id
     else:
+        chat = None
         chat_id = 0
         
-    # Group check first
     is_group = str(chat_id).startswith('-')
-    if is_group:
-        if chat_id == getattr(Config, "ADMIN_GROUP", 0):
-            return True, None
-        if db.is_group_approved(chat_id):
-            return True, None
-        else:
-            return False, "This group is not approved."
+    if is_group and chat_id == getattr(Config, "ADMIN_GROUP", 0):
+        return True, None
 
-    # Now it's a DM (Private chat)
     if user_id in Config.OWNER_IDS:
         return True, None
 
@@ -163,6 +159,7 @@ def is_allowed(update, show_id=None, language=None):
             is_blocked = True
             break
 
+    final_allow = False
     for sub_type, sub_data, expiry in subs:
         # Check Type Matching first
         match = False
@@ -185,7 +182,8 @@ def is_allowed(update, show_id=None, language=None):
                     if now <= expiry_dt:
                         if is_blocked:
                             return False, "This story is blocked for your account."
-                        return True, None
+                        final_allow = True
+                        break
                     else:
                         has_expired = True
                 except:
@@ -194,7 +192,15 @@ def is_allowed(update, show_id=None, language=None):
                 # Lifetime
                 if is_blocked:
                     return False, "This story is blocked for your account."
-                return True, None
+                final_allow = True
+                break
+                
+    if final_allow:
+        if is_group and chat:
+            chat_title = chat.title or "Unknown Group"
+            chat_username = chat.username or ""
+            db.update_buyer_group(chat_id, chat_title, chat_username, user_id)
+        return True, None
     
     if has_expired:
         return False, "Subscription Expired Renew it"
