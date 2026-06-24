@@ -23,6 +23,9 @@ class Config:
 
     DOWNLOAD_DIR = os.getenv("DOWNLOAD_DIR", "downloads")
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+    
+    AVATAR_DIR = os.getenv("AVATAR_DIR", "avatars")
+    os.makedirs(AVATAR_DIR, exist_ok=True)
 
     WVD_FILE = os.getenv("WVD_FILE", "l3.wvd")
 
