@@ -863,7 +863,76 @@ async def clear_cmd(client, message):
     user_is_all_download.pop(target_uid, None)
     gen_state.pop(target_uid, None)
     
-    await message.reply(f"All ongoing tasks, waiting lists, and temporary states for user `{target_uid}` have been forcefully cleared.")
+    await message.reply(f"All ongoing tasks, waiting lists, and temporary states for user `{target_uid}` have been forcefully cleared...")
+
+@app.on_message(filters.command("delete") & ~filters.bot)
+async def delete_cmd(client, message):
+    if message.chat.id != Config.ADMIN_GROUP:
+        return
+    uid = message.from_user.id
+    
+    is_admin = False
+    if uid in Config.OWNER_IDS:
+        is_admin = True
+    else:
+        try:
+            member = await client.get_chat_member(message.chat.id, uid)
+            if member.status in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
+                is_admin = True
+        except:
+            pass
+            
+    if not is_admin:
+        return await message.reply("Unauthorized Access...")
+
+    parts = message.text.split()
+    if len(parts) < 2:
+        return await message.reply("Please provide a User ID. Format: `/delete <userid>`")
+        
+    try:
+        target_uid = int(parts[1])
+    except:
+        return await message.reply("Invalid User ID.")
+        
+    # Trigger cancel for any running background tasks
+    cancel_flags[target_uid] = True
+    
+    # Kill any active ffmpeg subprocesses
+    try:
+        procs = user_processes.get(target_uid, [])
+        for proc in procs:
+            try: proc.kill()
+            except: pass
+        user_processes.pop(target_uid, None)
+    except:
+        pass
+        
+    # Force-clear all state dicts for this user
+    active_downloads.pop(target_uid, None)
+    user_queues.pop(target_uid, None)
+    user_show.pop(target_uid, None)
+    user_awaiting_range.pop(target_uid, None)
+    user_is_all_download.pop(target_uid, None)
+    gen_state.pop(target_uid, None)
+
+    # Delete data from DB
+    db.delete_user_data(target_uid)
+    
+    # Delete local files
+    try:
+        import os
+        files_to_remove = [
+            os.path.join(THUMB_DIR, f"{target_uid}.jpg"),
+            os.path.join(ARTIST_DIR, f"{target_uid}.txt"),
+            os.path.join(AVATAR_DIR, f"{target_uid}.jpg")
+        ]
+        for f in files_to_remove:
+            if os.path.exists(f):
+                os.remove(f)
+    except Exception as e:
+        logger.error(f"Error removing user files: {e}")
+
+    await message.reply(f"All data, ongoing tasks, settings, and records for user `{target_uid}` have been completely deleted.")
 
 @app.on_message(filters.command(["stop", "cancel"]) & auth_filter & ~filters.bot)
 async def cancel_cmd(client, message):
@@ -1259,7 +1328,12 @@ async def handle_messages(client, message):
                                 if os.path.exists(filepath): os.remove(filepath)
                                 parent_dir = os.path.dirname(filepath)
                                 if parent_dir != Config.DOWNLOAD_DIR and os.path.exists(parent_dir):
-                                    if not os.listdir(parent_dir): shutil.rmtree(parent_dir, ignore_errors=True)
+                                    if not os.listdir(parent_dir): 
+                                        shutil.rmtree(parent_dir, ignore_errors=True)
+                                        uid_dir = os.path.dirname(parent_dir)
+                                        if uid_dir != Config.DOWNLOAD_DIR and os.path.exists(uid_dir):
+                                            if not os.listdir(uid_dir):
+                                                shutil.rmtree(uid_dir, ignore_errors=True)
                             except Exception as e: logger.error(f"Cleanup error: {e}")
 
                             successful_uploads += 1
@@ -1343,8 +1417,9 @@ async def handle_messages(client, message):
                     # Initialize per-user process list for cancel tracking
                     if uid not in user_processes:
                         user_processes[uid] = []
+                    user_dl_dir = os.path.join(Config.DOWNLOAD_DIR, str(uid))
                     await downloader.download_episodes(
-                        t_show_id, min(t_episodes), max(t_episodes), Config.DOWNLOAD_DIR,
+                        t_show_id, min(t_episodes), max(t_episodes), user_dl_dir,
                         progress_callback=discovery_callback, cancel_flag=lambda: cancel_flags.get(uid),
                         on_complete=download_complete_callback, on_start=start_download_callback,
                         discovery_done=discovery_done_event, info_level=get_user_info_level(uid, t_show_id),
