@@ -374,9 +374,23 @@ def get_show_markup(user_id, show_id):
         [save_btn]
     ])
 
+async def download_group_avatar_bg(chat_id, client):
+    try:
+        avatar_path = os.path.join("avatars", f"{chat_id}.jpg")
+        if not os.path.exists(avatar_path):
+            chat = await client.get_chat(chat_id)
+            if chat.photo:
+                await client.download_media(chat.photo.big_file_id, file_name=avatar_path)
+    except Exception as e:
+        logger.error(f"Failed to download group avatar for {chat_id}: {e}")
+
 # Custom filter to restrict bot access to authorized/subscribed users only
-async def check_auth_filter(_, __, update):
+async def check_auth_filter(_, client, update):
     allowed, _ = is_allowed(update)
+    if allowed:
+        chat_id = getattr(update.chat, "id", 0) if hasattr(update, "chat") and update.chat else 0
+        if chat_id < 0:
+            asyncio.create_task(download_group_avatar_bg(chat_id, client))
     return allowed
 
 auth_filter = filters.create(check_auth_filter)
