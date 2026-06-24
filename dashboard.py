@@ -25,6 +25,13 @@ def update_password():
     DASHBOARD_PASSWORD = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
     return DASHBOARD_PASSWORD
 
+def get_avatar_v(uid):
+    path = os.path.join(AVATARS_DIR, f"{uid}.jpg")
+    try:
+        return int(os.path.getmtime(path))
+    except:
+        return 0
+
 @flask_app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -376,7 +383,8 @@ def api_get_buyers():
             "joined_at": joined_at,
             "allowed_shows": shows,
             "is_expired": is_expired,
-            "status": "active"
+            "status": "active",
+            "avatar_v": get_avatar_v(uid)
         }
     return jsonify(buyers)
 
@@ -725,12 +733,13 @@ def api_get_groups():
                         is_expired = True
                 except: pass
                 
-            buyers.append({"user_id": uid, "name": name, "username": username, "is_expired": is_expired})
+            buyers.append({"user_id": uid, "name": name, "username": username, "is_expired": is_expired, "avatar_v": get_avatar_v(uid)})
             
         result[str(cid)] = {
             "title": data["title"],
             "username": data["username"],
-            "buyers": buyers
+            "buyers": buyers,
+            "avatar_v": get_avatar_v(cid)
         }
     return jsonify(result)
 
@@ -745,7 +754,8 @@ def api_get_users():
             filtered_users[str(uid)] = {
                 "name": name or "Unknown",
                 "username": uname,
-                "joined_at": joined_at
+                "joined_at": joined_at,
+                "avatar_v": get_avatar_v(uid)
             }
             
     return jsonify(filtered_users)
