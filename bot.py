@@ -151,6 +151,7 @@ user_queues = {}
 cancel_flags = {}
 gen_state = {}
 user_processes = {}  # Per-user process tracking for cancel
+expired_notified = set()
 
 
 def is_download_active(uid):
@@ -300,6 +301,60 @@ async def auto_delete_task():
             logger.error(f"Auto delete error: {e}")
         
         await asyncio.sleep(3600) # Run every 1 hour
+
+async def check_expired_task():
+    """Background task to check for newly expired users and notify admin group"""
+    while True:
+        try:
+            from datetime import datetime, timezone, timedelta
+            ist = timezone(timedelta(hours=5, minutes=30))
+            now = datetime.now(ist)
+            
+            # Fetch all users who have subscriptions
+            db.cursor.execute('SELECT DISTINCT user_id FROM subscriptions')
+            all_users = db.cursor.fetchall()
+            
+            for (uid,) in all_users:
+                # Check if already notified
+                db.cursor.execute('SELECT value FROM settings WHERE key = ?', (f"notified_expired_{uid}",))
+                notified = db.cursor.fetchone()
+                if notified and notified[0] == "1":
+                    continue
+                    
+                db.cursor.execute('SELECT expiry FROM subscriptions WHERE user_id = ?', (uid,))
+                subs = db.cursor.fetchall()
+                
+                if not subs:
+                    continue
+                    
+                is_expired = True
+                for (expiry,) in subs:
+                    if not expiry:
+                        is_expired = False
+                        break
+                    try:
+                        exp_dt = datetime.fromisoformat(expiry)
+                        if now <= exp_dt:
+                            is_expired = False
+                            break
+                    except:
+                        pass
+                        
+                if is_expired:
+                    db.set_setting(f"notified_expired_{uid}", "1")
+                    user = db.get_user(uid)
+                    username = user[0] if user else ""
+                    name = user[1] if user else "Unknown"
+                    u_name_text = f"\n\n@{username}" if username else ""
+                    exp_msg = f"Validity Expired...\n\n{name}\n\n`{uid}`{u_name_text}"
+                    try:
+                        await app.send_message(Config.ADMIN_GROUP, exp_msg)
+                    except Exception as e:
+                        logger.error(f"Error auto-sending expired msg to admin group: {e}")
+        except Exception as e:
+            logger.error(f"Check expired task error: {e}")
+            
+        await asyncio.sleep(60) # Check every 1 minute
 
 async def set_cmds(client):
     try:
@@ -602,13 +657,15 @@ async def start(client, message):
             
     is_new = db.add_user(uid, username, name)
     asyncio.create_task(download_avatar_bg(uid, client))
-    allowed, msg = is_allowed(message)
-    if not allowed:
-        return # Act completely dead for unauthorized users
-
-    logger.info(f"Start by {uid}")
     
     if is_new:
+        try:
+            u_name_text = f"\n\n@{username}" if username else ""
+            new_user_msg = f"New User...\n\n{name}\n\n`{uid}`{u_name_text}"
+            await client.send_message(Config.ADMIN_GROUP, new_user_msg)
+        except Exception as e:
+            logger.error(f"Error sending new user msg to admin group: {e}")
+            
         total, today, week = db.get_user_stats()
         log_text = (
             "NEW USER JOINED!\n\n"
@@ -624,6 +681,25 @@ async def start(client, message):
             f"Joined: {time.strftime('%Y-%m-%d %I:%M:%S %p IST')}"
         )
         await send_log("log_usr_channel", log_text)
+
+    allowed, msg = is_allowed(message)
+    is_group = message.chat.type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]
+    
+    if not allowed:
+        if not is_group:
+            await message.reply(f"Hey {name}\n\nContact Admin\n@Index_Guide")
+            
+        if msg == "Subscription Expired Renew it" and uid not in expired_notified:
+            expired_notified.add(uid)
+            try:
+                u_name_text = f"\n\n@{username}" if username else ""
+                exp_msg = f"Validity Expired...\n\n{name}\n\n`{uid}`{u_name_text}"
+                await client.send_message(Config.ADMIN_GROUP, exp_msg)
+            except Exception as e:
+                logger.error(f"Error sending expired msg to admin group: {e}")
+        return
+
+    logger.info(f"Start by {uid}")
 
     # Owner gets no validity message, just the welcome
     if uid in Config.OWNER_IDS:
@@ -813,114 +889,6 @@ async def saved_cmd(client, message):
         ])
     await message.reply("Your Saved Stories...", reply_markup=InlineKeyboardMarkup(buttons))
 
-@app.on_message(filters.command("clear") & ~filters.bot)
-async def clear_cmd(client, message):
-    if message.chat.id != Config.ADMIN_GROUP:
-        return
-    uid = message.from_user.id
-    
-    is_admin = False
-    if uid in Config.OWNER_IDS:
-        is_admin = True
-    else:
-        try:
-            member = await client.get_chat_member(message.chat.id, uid)
-            if member.status in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
-                is_admin = True
-        except:
-            pass
-            
-    if not is_admin:
-        return await message.reply("Unauthorized Access...")
-
-    parts = message.text.split()
-    if len(parts) < 2:
-        return await message.reply("Please provide a User ID. Format: `/clear <userid>`")
-        
-    try:
-        target_uid = int(parts[1])
-    except:
-        return await message.reply("Invalid User ID.")
-        
-    # Trigger cancel for any running background tasks
-    cancel_flags[target_uid] = True
-    
-    # Kill any active ffmpeg subprocesses
-    try:
-        procs = user_processes.get(target_uid, [])
-        for proc in procs:
-            try: proc.kill()
-            except: pass
-        user_processes.pop(target_uid, None)
-    except:
-        pass
-        
-    # Force-clear all state dicts for this user
-    active_downloads.pop(target_uid, None)
-    user_queues.pop(target_uid, None)
-    user_show.pop(target_uid, None)
-    user_awaiting_range.pop(target_uid, None)
-    user_is_all_download.pop(target_uid, None)
-    gen_state.pop(target_uid, None)
-    
-    await message.reply(f"All ongoing tasks, waiting lists, and temporary states for user `{target_uid}` have been forcefully cleared...")
-
-@app.on_message(filters.command("delete") & ~filters.bot)
-async def delete_cmd(client, message):
-    if message.chat.id != Config.ADMIN_GROUP:
-        return
-    uid = message.from_user.id
-    if uid not in Config.OWNER_IDS:
-        return await message.reply("Unauthorized Access...")
-
-    parts = message.text.split()
-    if len(parts) < 2:
-        return await message.reply("Please provide a User ID. Format: `/delete <userid>`")
-        
-    try:
-        target_uid = int(parts[1])
-    except:
-        return await message.reply("Invalid User ID.")
-        
-    # Trigger cancel for any running background tasks
-    cancel_flags[target_uid] = True
-    
-    # Kill any active ffmpeg subprocesses
-    try:
-        procs = user_processes.get(target_uid, [])
-        for proc in procs:
-            try: proc.kill()
-            except: pass
-        user_processes.pop(target_uid, None)
-    except:
-        pass
-        
-    # Force-clear all state dicts for this user
-    active_downloads.pop(target_uid, None)
-    user_queues.pop(target_uid, None)
-    user_show.pop(target_uid, None)
-    user_awaiting_range.pop(target_uid, None)
-    user_is_all_download.pop(target_uid, None)
-    gen_state.pop(target_uid, None)
-
-    # Delete data from DB
-    db.delete_user_data(target_uid)
-    
-    # Delete local files
-    try:
-        import os
-        files_to_remove = [
-            os.path.join(THUMB_DIR, f"{target_uid}.jpg"),
-            os.path.join(ARTIST_DIR, f"{target_uid}.txt"),
-            os.path.join(AVATAR_DIR, f"{target_uid}.jpg")
-        ]
-        for f in files_to_remove:
-            if os.path.exists(f):
-                os.remove(f)
-    except Exception as e:
-        logger.error(f"Error removing user files: {e}")
-
-    await message.reply(f"All data, ongoing tasks, settings, and records for user `{target_uid}` have been completely deleted.")
 
 @app.on_message(filters.command(["stop", "cancel"]) & auth_filter & ~filters.bot)
 async def cancel_cmd(client, message):
@@ -1697,7 +1665,7 @@ async def main():
             
     # Start auto delete task in background
     asyncio.create_task(auto_delete_task())
-    
+    asyncio.create_task(check_expired_task())
     await idle()
     await app.stop()
     await aio_bot.session.close()
