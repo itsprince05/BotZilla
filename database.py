@@ -188,6 +188,7 @@ class Database:
                                (user_id, username, sub_type, sub_data, expiry, is_trial) 
                                VALUES (?, ?, ?, ?, ?, ?)''', 
                             (user_id, username, sub_type, sub_data, expiry, is_trial))
+        self.cursor.execute('DELETE FROM settings WHERE key = ?', (f"notified_expired_{user_id}",))
         self.conn.commit()
 
     def remove_subscription(self, user_id, sub_type=None, sub_data=None):
