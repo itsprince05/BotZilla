@@ -461,7 +461,7 @@
                         const titleColor = isDummy ? 'color: #999;' : 'color: #1c1e21;';
                         const subColor = isDummy ? 'color: #bbb;' : 'color: #666;';
 
-                        const bgStyle = data.is_expired ? 'background: #ffebee; border-left: 4px solid #f44336;' : 'background: #e8f5e9; border-left: 4px solid #4CAF50;';
+                        const bgStyle = data.is_expired ? 'background: #ffffff; border-left: 4px solid #f44336;' : 'background: #ffffff; border-left: 4px solid #4CAF50;';
                         container.innerHTML += `
                         <div class="list-card" style="cursor: pointer; ${bgStyle}" 
                              oncontextmenu="event.preventDefault(); showDeletePopup('${uid}', 'buyer', '${name.replace(/'/g, "\\'")}'); return false;"
@@ -473,7 +473,7 @@
                              onmouseleave="cancelLongPress(event)"
                              onclick="if(window.isLongPressing) { window.isLongPressing=false; return; } window.location.href='/user/${uid}'">
                             <div style="display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden;">
-                                <img src="/api/avatars/${uid}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                                <img src="/api/avatars/${uid}?_t=${Date.now()}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
                                 <div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: #eef5fb; color: #2481cc; align-items: center; justify-content: center; flex-shrink: 0;">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user-round-icon lucide-user-round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
                                 </div>
@@ -515,14 +515,14 @@
                         let bgStyle = '';
                         if (isBuyer) {
                             const isExpired = buyers[uid].is_expired;
-                            bgStyle = isExpired ? 'background: #ffebee; border-left: 4px solid #f44336;' : 'background: #e8f5e9; border-left: 4px solid #4CAF50;';
+                            bgStyle = isExpired ? 'background: #ffffff; border-left: 4px solid #f44336;' : 'background: #ffffff; border-left: 4px solid #4CAF50;';
                         }
 
                         container.innerHTML += `
                         <div class="list-card" style="${bgStyle}; cursor: pointer;"
                              onclick="window.location.href='${isBuyer ? '/user/' + uid : '/new_buyer/' + uid}'">
                             <div style="display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden;">
-                                <img src="/api/avatars/${uid}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                                <img src="/api/avatars/${uid}?_t=${Date.now()}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
                                 <div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: #eef5fb; color: #2481cc; align-items: center; justify-content: center; flex-shrink: 0;">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user-round-icon lucide-user-round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
                                 </div>
@@ -655,8 +655,8 @@
                             const borderColor = b.is_expired ? '#f44336' : '#4CAF50';
                             
                             buyersHtml += `
-                                <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 6px 0 6px 10px; border-left: 3px solid ${borderColor}; cursor: pointer; background: #fafafa; border-radius: 0 6px 6px 0;" onclick="window.location.href='/user/${b.user_id}'">
-                                    <img src="/api/avatars/${b.user_id}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                                <div style="display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 6px 0 6px 10px; border-left: 3px solid ${borderColor}; cursor: pointer; background: #ffffff; border-radius: 0 6px 6px 0;" onclick="window.location.href='/user/${b.user_id}'">
+                                    <img src="/api/avatars/${b.user_id}?_t=${Date.now()}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
                                     <div style="display: none; width: 32px; height: 32px; border-radius: 50%; background: #eef5fb; color: #2481cc; align-items: center; justify-content: center; flex-shrink: 0;">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-user-round-icon lucide-user-round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>
                                     </div>
@@ -674,7 +674,7 @@
                         container.innerHTML += `
                             <div class="list-card" style="display: block; cursor: default;">
                                 <div style="display: flex; align-items: center; gap: 10px;">
-                                    <img src="/api/avatars/${cid}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                                    <img src="/api/avatars/${cid}?_t=${Date.now()}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
                                     <div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: #eef5fb; color: #2481cc; align-items: center; justify-content: center; flex-shrink: 0;">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-users-round-icon lucide-users-round"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg>
                                     </div>
@@ -683,7 +683,7 @@
                                         <div class="list-subtitle" style="color: #666;">${cid}${gUname}</div>
                                     </div>
                                 </div>
-                                <div style="margin-top: 10px; padding-top: 0; border-top: 1px solid #eee;">
+                                <div>
                                     ${buyersHtml}
                                 </div>
                             </div>
