@@ -696,6 +696,30 @@ def get_buyer_saved_shows(userid):
     shows.sort(key=lambda x: str(x['title']).lower())
     return jsonify(shows)
 
+@flask_app.route('/api/groups', methods=['GET'])
+def api_get_groups():
+    groups_data = db.get_all_buyer_groups()
+    result = {}
+    for cid, data in groups_data.items():
+        buyers = []
+        for uid in data["buyers"]:
+            db.cursor.execute('SELECT first_name, username FROM users WHERE user_id = ?', (uid,))
+            urow = db.cursor.fetchone()
+            
+            db.cursor.execute('SELECT value FROM settings WHERE key = ?', (f"buyer_name_{uid}",))
+            crow = db.cursor.fetchone()
+            
+            name = crow[0] if crow else (urow[0] if urow else "Unknown")
+            username = urow[1] if urow else ""
+            buyers.append({"user_id": uid, "name": name, "username": username})
+            
+        result[str(cid)] = {
+            "title": data["title"],
+            "username": data["username"],
+            "buyers": buyers
+        }
+    return jsonify(result)
+
 @flask_app.route('/api/users', methods=['GET'])
 def api_get_users():
     db.cursor.execute('SELECT user_id, first_name, username, joined_at FROM users')
