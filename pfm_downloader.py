@@ -534,6 +534,21 @@ class PFMDownloader:
                                     if asyncio.iscoroutinefunction(progress_callback): await progress_callback(s)
                                     else: progress_callback(s)
                                 except: pass
+            
+            for mapped_seq, mapped_s in mapping.items():
+                if mapped_s not in processed_metadata:
+                    logger.warning(f"Metadata permanently missing for Ep.{mapped_s}. Skipping...")
+                    processed_metadata.add(mapped_s)
+                    if progress_callback:
+                        try:
+                            if asyncio.iscoroutinefunction(progress_callback): await progress_callback(mapped_s)
+                            else: progress_callback(mapped_s)
+                        except: pass
+                    if on_complete:
+                        try:
+                            if asyncio.iscoroutinefunction(on_complete): await on_complete(mapped_s, None, 0)
+                            else: on_complete(mapped_s, None, 0)
+                        except: pass
 
             # Safe increment to cover all indices even if sequence numbers have gaps
             current_seq += len(stories)
