@@ -351,7 +351,7 @@ class Database:
         self.conn.commit()
 
     def get_all_buyer_groups(self):
-        self.cursor.execute('''SELECT chat_id, chat_title, chat_username, user_id, first_seen FROM buyer_groups ORDER BY first_seen DESC''')
+        self.cursor.execute('''SELECT chat_id, chat_title, chat_username, user_id, last_used FROM buyer_groups ORDER BY last_used DESC''')
         rows = self.cursor.fetchall()
         groups = {}
         for r in rows:
