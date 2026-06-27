@@ -1701,7 +1701,8 @@ async def main():
         await asyncio.sleep(0.5)
         
     if tunnel_url:
-        dashboard_msg = f"Dashboard URL...\n\n`{dashboard.DASHBOARD_PASSWORD}`\n\n{tunnel_url}"
+        pwd = dashboard.DASHBOARD_PASSWORD
+        dashboard_msg = f"Dashboard URL...\n\n<code>{pwd[:10]}<tg-spoiler>{pwd[10:]}</tg-spoiler></code>\n\n{tunnel_url}"
         if restart_msg:
             try: 
                 success_text = "Bot restarted successfully..." if restart_action == "restart" else "Bot is running and updated successfully..."
