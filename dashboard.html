@@ -523,13 +523,13 @@
                             const isExpired = buyers[uid].is_expired;
                             bgStyle = isExpired ? 'background: linear-gradient(to right, #fde3e1, #ffffff); box-shadow: inset 4px 0 0 0 #f44336;' : 'background: linear-gradient(to right, #e4f3e5, #ffffff); box-shadow: inset 4px 0 0 0 #4CAF50;';
                         } else {
-                            bgStyle = 'background: #ffffff;';
+                            bgStyle = 'background: #ffffff; box-shadow: inset 4px 0 0 0 #ffffff;';
                         }
 
                         container.innerHTML += `
                         <div class="list-card" style="${bgStyle}; cursor: pointer; padding: 10px;"
                              onclick="window.location.href='${isBuyer ? '/user/' + uid : '/new_buyer/' + uid}'">
-                            <div style="display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden; margin-left: ${isBuyer ? '5px' : '0'};">
+                            <div style="display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden; margin-left: 5px;">
                                 ${userData.avatar_v > 0 
                                     ? `<img src="/api/avatars/${uid}?_t=${userData.avatar_v}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
                                        <div style="display: none; width: 40px; height: 40px; border-radius: 50%; background: #eef5fb; color: #2481cc; align-items: center; justify-content: center; flex-shrink: 0;">
