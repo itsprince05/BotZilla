@@ -388,7 +388,7 @@
             <!-- GROUPS TAB -->
             <div id="groups" class="tab-content">
                 <div id="groupsCount" style="font-size: 13px; color: #666; font-weight: 600; padding: 0 0 10px 0;"></div>
-                <div class="item-list" id="groupsTable"></div>
+                <div style="display: flex; flex-direction: column; gap: 10px;" id="groupsTable"></div>
             </div>
         </div>
     </div>
@@ -688,7 +688,7 @@
                         const gUname = data.username ? ` @${data.username}` : '';
                         
                         container.innerHTML += `
-                            <div class="list-card" style="display: block; cursor: default; padding-left: 0; padding-bottom: 0;">
+                            <div style="background: #ffffff; border-radius: 10px; border: 1px solid #e0e0e0; padding-top: 10px; display: block; cursor: default; overflow: hidden;">
                                 <div style="display: flex; align-items: center; gap: 10px;">
                                 ${data.avatar_v > 0 
                                     ? `<img src="/api/avatars/${cid}?_t=${data.avatar_v}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex-shrink: 0; margin-left: 10px;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
