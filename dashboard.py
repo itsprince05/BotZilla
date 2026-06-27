@@ -724,6 +724,9 @@ def api_get_groups():
             name = crow[0] if crow else (urow[0] if urow else "Unknown")
             username = urow[1] if urow else ""
             
+            db.cursor.execute('SELECT 1 FROM subscriptions WHERE user_id = ? LIMIT 1', (uid,))
+            is_buyer = bool(db.cursor.fetchone())
+
             db.cursor.execute('SELECT expiry FROM subscriptions WHERE user_id = ? LIMIT 1', (uid,))
             exp_row = db.cursor.fetchone()
             is_expired = False
@@ -733,7 +736,7 @@ def api_get_groups():
                         is_expired = True
                 except: pass
                 
-            buyers.append({"user_id": uid, "name": name, "username": username, "is_expired": is_expired, "avatar_v": get_avatar_v(uid)})
+            buyers.append({"user_id": uid, "name": name, "username": username, "is_expired": is_expired, "is_buyer": is_buyer, "avatar_v": get_avatar_v(uid)})
             
         result[str(cid)] = {
             "title": data["title"],
