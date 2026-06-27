@@ -936,8 +936,8 @@
 
                 html += `
                 <div id="wrapper-${rule.show_id}" style="margin: ${margin}; ${wrapperRadius} border-top: ${borderTop}; border-bottom: ${borderBottom}; border-right: ${borderRight}; border-left: ${borderLeft}; overflow: hidden; background: ${cardBg}; transition: margin 0.2s, border-radius 0.2s; box-sizing: border-box; position: relative; z-index: ${isDropdownOpen ? '10' : '1'};">
-                    <div id="card-${rule.show_id}" class="list-card" style="background: transparent; border-radius: 0; border: none; ${innerShadow} padding: 5px 10px 10px 10px; display: flex; flex-direction: column; text-align: left; align-items: stretch; transition: box-shadow 0.2s; box-sizing: border-box; width: 100%;">
-                        <div style="display: flex; align-items: flex-start; justify-content: space-between; text-align: left; cursor: pointer;" onclick="toggleCustomDropdown('${rule.show_id}')">
+                    <div id="card-${rule.show_id}" class="list-card" style="background: transparent; border-radius: 0; border: none; ${innerShadow} padding: 5px 10px 10px 9px; display: flex; flex-direction: column; text-align: left; align-items: stretch; transition: box-shadow 0.2s; box-sizing: border-box; width: 100%;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; text-align: left; cursor: pointer;" onclick="toggleCustomDropdown('${rule.show_id}')">
                             <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding-right: 10px; text-align: left;">
                                 <div class="list-title" style="white-space: normal; word-break: break-word; font-weight: 600; line-height: 1.3; text-align: left; padding-top: 5px;">${rule.title}</div>
                                 ${labelsHtml}
