@@ -671,7 +671,7 @@
                             }
                             
                             buyersHtml += `
-                                <div style="display: flex; align-items: center; gap: 10px; margin-top: 0; padding: 10px; border-left: 3px solid ${borderColor}; cursor: pointer; background: #ffffff; border-radius: 0 6px 6px 0;" onclick="window.location.href='/user/${b.user_id}'">
+                                <div style="display: flex; align-items: center; gap: 10px; margin-top: 0; padding: 10px; border-left: 4px solid ${borderColor}; cursor: pointer; background: #ffffff; border-radius: 0 6px 6px 0;" onclick="window.location.href='/user/${b.user_id}'">
                                 ${b.avatar_v > 0 
                                     ? `<img src="/api/avatars/${b.user_id}?_t=${b.avatar_v}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
                                        <div style="display: none; width: 32px; height: 32px; border-radius: 50%; background: #eef5fb; color: #2481cc; align-items: center; justify-content: center; flex-shrink: 0;">
