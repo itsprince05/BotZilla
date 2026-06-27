@@ -1191,6 +1191,11 @@ async def handle_messages(client, message):
 
                 logger.info(f"Starting download for user {uid}: {t_show_id} range {t_start_seq}-{t_end_seq}")
                 
+                story_title = "Unknown Story"
+                ep_text = f"{t_start_seq}-{t_end_seq}" if t_start_seq != t_end_seq else str(t_start_seq)
+                if len(t_episodes) > 1 and (t_end_seq - t_start_seq + 1) != len(t_episodes):
+                    ep_text = t_text
+                    
                 # Log the request
                 try:
                     show_info_for_log = await downloader.get_show_info(t_show_id, info_level=get_user_info_level(uid, t_show_id))
@@ -1201,10 +1206,6 @@ async def handle_messages(client, message):
                         db_story = db.get_story(t_show_id)
                         story_title = db_story[1] if db_story else 'Unknown Story'
                         image_url = None
-                    
-                    ep_text = f"{t_start_seq}-{t_end_seq}" if t_start_seq != t_end_seq else str(t_start_seq)
-                    if len(t_episodes) > 1 and (t_end_seq - t_start_seq + 1) != len(t_episodes):
-                        ep_text = t_text 
 
                     req_log_text = (
                         "Episode Request\n\n"
@@ -1390,7 +1391,8 @@ async def handle_messages(client, message):
                     locked_episodes.add(seq)
                     try:
                         import re
-                        clean_title = re.sub(r'^(?:Ep|Episode|E)[\s\-.:,]*\d+[\s\-.:,]*', '', title, flags=re.IGNORECASE).strip()
+                        clean_title = re.sub(r'^(?:(?:Ep|Episode|E|Ch|Chapter|C)[\s\-.:,]*\d+[\s\-.:,]*)+', '', title, flags=re.IGNORECASE).strip()
+                        clean_title = re.sub(r'^\d+[\s\-.:,]+', '', clean_title).strip()
                         display_title = f"Ep {seq} - {clean_title}" if clean_title else f"Ep {seq}"
                         msg = await client.send_message(t_chat_id, f"Downloading...\n\n{display_title}")
                         msg_objs[seq] = msg
@@ -1444,22 +1446,43 @@ async def handle_messages(client, message):
                     else:
                         error_msg = getattr(downloader, "last_download_error", None)
                         user_name = t_msg.from_user.first_name if t_msg.from_user else "Unknown"
+                        err_text = (
+                            f"Download Failed...\n\n"
+                            f"`{uid}`\n{user_name}\n\n"
+                            f"`{t_show_id}`\n{story_title}\n\n"
+                            f"Episodes: {ep_text}\n\n"
+                            f"Reason...\n{error_msg or 'Unknown Error'}"
+                        )
                         try:
-                            await client.send_message(Config.ADMIN_GROUP, f"Download Failed for {user_name} (`{uid}`)\n\nStory ID: `{t_show_id}`\nReason: {error_msg or 'Unknown Error'}")
+                            await client.send_message(Config.ADMIN_GROUP, err_text)
                         except: pass
                         
                 except Exception as e:
                     logger.error(f"Pipeline error: {e}", exc_info=True)
                     user_name = t_msg.from_user.first_name if t_msg.from_user else "Unknown"
+                    err_text = (
+                        f"Pipeline Error...\n\n"
+                        f"`{uid}`\n{user_name}\n\n"
+                        f"`{t_show_id}`\n{story_title}\n\n"
+                        f"Episodes: {ep_text}\n\n"
+                        f"Reason...\n{str(e)[:500]}"
+                    )
                     try:
-                        await client.send_message(Config.ADMIN_GROUP, f"Pipeline Error for {user_name} (`{uid}`)\n\nStory ID: `{t_show_id}`\nError: {str(e)[:500]}")
+                        await client.send_message(Config.ADMIN_GROUP, err_text)
                     except: pass
                 except BaseException as e:
                     # Catches CancelledError, KeyboardInterrupt, SystemExit etc.
                     logger.error(f"Pipeline killed: {type(e).__name__}: {e}")
                     user_name = t_msg.from_user.first_name if t_msg.from_user else "Unknown"
+                    err_text = (
+                        f"Pipeline Killed...\n\n"
+                        f"`{uid}`\n{user_name}\n\n"
+                        f"`{t_show_id}`\n{story_title}\n\n"
+                        f"Episodes: {ep_text}\n\n"
+                        f"Reason...\n{type(e).__name__}"
+                    )
                     try:
-                        await client.send_message(Config.ADMIN_GROUP, f"Pipeline Killed for {user_name} (`{uid}`)\n\nStory ID: `{t_show_id}`\nException: {type(e).__name__}")
+                        await client.send_message(Config.ADMIN_GROUP, err_text)
                     except: pass
                     break
         except BaseException as e:
