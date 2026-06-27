@@ -185,15 +185,8 @@
             box-sizing: border-box;
         }
 
-        .list-card:first-child {
-            border-top-left-radius: 10px;
-            border-top-right-radius: 10px;
-        }
-
         .list-card:last-child {
             border-bottom: none;
-            border-bottom-left-radius: 10px;
-            border-bottom-right-radius: 10px;
         }
 
         .list-title {
@@ -469,7 +462,7 @@
                         const titleColor = isDummy ? 'color: #999;' : 'color: #1c1e21;';
                         const subColor = isDummy ? 'color: #bbb;' : 'color: #666;';
 
-                        const bgStyle = data.is_expired ? 'background: #ffffff; border-left: 3px solid #f44336;' : 'background: #ffffff; border-left: 3px solid #4CAF50;';
+                        const bgStyle = data.is_expired ? 'background: #ffffff; box-shadow: inset 4px 0 0 0 #f44336;' : 'background: #ffffff; box-shadow: inset 4px 0 0 0 #4CAF50;';
                         container.innerHTML += `
                         <div class="list-card" style="cursor: pointer; ${bgStyle}" 
                              oncontextmenu="event.preventDefault(); showDeletePopup('${uid}', 'buyer', '${name.replace(/'/g, "\\'")}'); return false;"
@@ -528,7 +521,7 @@
                         let bgStyle = '';
                         if (isBuyer) {
                             const isExpired = buyers[uid].is_expired;
-                            bgStyle = isExpired ? 'background: #ffffff; border-left: 3px solid #f44336;' : 'background: #ffffff; border-left: 3px solid #4CAF50;';
+                            bgStyle = isExpired ? 'background: #ffffff; box-shadow: inset 4px 0 0 0 #f44336;' : 'background: #ffffff; box-shadow: inset 4px 0 0 0 #4CAF50;';
                         }
 
                         container.innerHTML += `
