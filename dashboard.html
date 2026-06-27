@@ -462,7 +462,7 @@
                         const titleColor = isDummy ? 'color: #999;' : 'color: #1c1e21;';
                         const subColor = isDummy ? 'color: #bbb;' : 'color: #666;';
 
-                        const bgStyle = data.is_expired ? 'background: #ffffff; box-shadow: inset 4px 0 0 0 #f44336;' : 'background: #ffffff; box-shadow: inset 4px 0 0 0 #4CAF50;';
+                        const bgStyle = data.is_expired ? 'background: linear-gradient(to right, #fff0f0, #ffffff, #ffffff, #ffffff); box-shadow: inset 4px 0 0 0 #f44336;' : 'background: linear-gradient(to right, #f2f9f2, #ffffff, #ffffff, #ffffff); box-shadow: inset 4px 0 0 0 #4CAF50;';
                         container.innerHTML += `
                         <div class="list-card" style="cursor: pointer; ${bgStyle}" 
                              oncontextmenu="event.preventDefault(); showDeletePopup('${uid}', 'buyer', '${name.replace(/'/g, "\\'")}'); return false;"
@@ -521,7 +521,9 @@
                         let bgStyle = '';
                         if (isBuyer) {
                             const isExpired = buyers[uid].is_expired;
-                            bgStyle = isExpired ? 'background: #ffffff; box-shadow: inset 4px 0 0 0 #f44336;' : 'background: #ffffff; box-shadow: inset 4px 0 0 0 #4CAF50;';
+                            bgStyle = isExpired ? 'background: linear-gradient(to right, #fff0f0, #ffffff, #ffffff, #ffffff); box-shadow: inset 4px 0 0 0 #f44336;' : 'background: linear-gradient(to right, #f2f9f2, #ffffff, #ffffff, #ffffff); box-shadow: inset 4px 0 0 0 #4CAF50;';
+                        } else {
+                            bgStyle = 'background: #ffffff;';
                         }
 
                         container.innerHTML += `
@@ -664,14 +666,17 @@
                             const titleColor = bName === 'Unknown' ? 'color: #999;' : 'color: #1c1e21;';
                             const subColor = bName === 'Unknown' ? 'color: #bbb;' : 'color: #666;';
                             let borderColor = '#4CAF50';
+                            let cardBg = 'linear-gradient(to right, #f2f9f2, #ffffff, #ffffff, #ffffff)';
                             if (b.is_buyer === false) {
                                 borderColor = '#ffffff';
+                                cardBg = '#ffffff';
                             } else if (b.is_expired) {
                                 borderColor = '#f44336';
+                                cardBg = 'linear-gradient(to right, #fff0f0, #ffffff, #ffffff, #ffffff)';
                             }
                             
                             buyersHtml += `
-                                <div class="list-card" style="margin: 0; padding: 10px; box-shadow: inset 4px 0 0 0 ${borderColor}; cursor: pointer; background: #ffffff; border-radius: 0; border: none; border-bottom: 1px solid #eee;" onclick="window.location.href='/user/${b.user_id}'">
+                                <div class="list-card" style="margin: 0; padding: 10px; box-shadow: inset 4px 0 0 0 ${borderColor}; cursor: pointer; background: ${cardBg}; border-radius: 0; border: none; border-bottom: 1px solid #eee;" onclick="window.location.href='/user/${b.user_id}'">
                                     <div style="display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden;">
                                     ${b.avatar_v > 0 
                                         ? `<img src="/api/avatars/${b.user_id}?_t=${b.avatar_v}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
