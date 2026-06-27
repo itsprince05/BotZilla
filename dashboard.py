@@ -111,7 +111,7 @@ def user_page(userid):
     saved_shows = [{"id": r[0], "title": r[1] or str(r[0])} for r in db.cursor.fetchall()]
     saved_shows.sort(key=lambda x: str(x['title']).lower())
     
-    db.cursor.execute('SELECT expiry FROM subscriptions WHERE user_id = ? LIMIT 1', (userid,))
+    db.cursor.execute('SELECT expiry FROM subscriptions WHERE user_id = ? AND sub_type IN ("validity", "all", "language", "custom_story", "extra_episode") LIMIT 1', (userid,))
     exp_row = db.cursor.fetchone()
     
     expiry_text = "No active validity"
@@ -368,7 +368,7 @@ def api_get_buyers():
         buyer_name = c_row[0] if c_row else (urow[0] if urow else "Unknown")
         joined_at = urow[2] if urow else ""
         
-        db.cursor.execute('SELECT expiry FROM subscriptions WHERE user_id = ? LIMIT 1', (uid,))
+        db.cursor.execute('SELECT expiry FROM subscriptions WHERE user_id = ? AND sub_type IN ("validity", "all", "language", "custom_story", "extra_episode") LIMIT 1', (uid,))
         exp_row = db.cursor.fetchone()
         is_expired = False
         if exp_row and exp_row[0]:
@@ -448,7 +448,7 @@ def api_update_buyer_all(userid):
             db.cursor.execute('DELETE FROM user_saves WHERE user_id = ?', (userid,))
         db.conn.commit()
     
-    db.cursor.execute('SELECT expiry FROM subscriptions WHERE user_id = ? LIMIT 1', (userid,))
+    db.cursor.execute('SELECT expiry FROM subscriptions WHERE user_id = ? AND sub_type IN ("validity", "all", "language", "custom_story", "extra_episode") LIMIT 1', (userid,))
     old_exp = db.cursor.fetchone()
     current_expiry = old_exp[0] if old_exp else None
 
@@ -642,7 +642,7 @@ def get_buyer_info(userid):
     c_row = db.cursor.fetchone()
     set_artist = (c_row[0] == "1") if c_row else False
     
-    db.cursor.execute('SELECT expiry FROM subscriptions WHERE user_id = ? LIMIT 1', (userid,))
+    db.cursor.execute('SELECT expiry FROM subscriptions WHERE user_id = ? AND sub_type IN ("validity", "all", "language", "custom_story", "extra_episode") LIMIT 1', (userid,))
     exp_row = db.cursor.fetchone()
     
     expiry_text = "No active validity"
@@ -727,7 +727,7 @@ def api_get_groups():
             db.cursor.execute('SELECT 1 FROM subscriptions WHERE user_id = ? LIMIT 1', (uid,))
             is_buyer = bool(db.cursor.fetchone())
 
-            db.cursor.execute('SELECT expiry FROM subscriptions WHERE user_id = ? LIMIT 1', (uid,))
+            db.cursor.execute('SELECT expiry FROM subscriptions WHERE user_id = ? AND sub_type IN ("validity", "all", "language", "custom_story", "extra_episode") LIMIT 1', (uid,))
             exp_row = db.cursor.fetchone()
             is_expired = False
             if exp_row and exp_row[0]:
