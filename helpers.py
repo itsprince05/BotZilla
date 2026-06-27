@@ -151,8 +151,29 @@ def is_allowed(update, show_id=None, language=None):
     from datetime import timezone, timedelta
     ist = timezone(timedelta(hours=5, minutes=30))
     now = datetime.now(ist)
-    has_valid_type = False
+    
+    general_validity_active = False
     has_expired = False
+    
+    for sub_type, sub_data, expiry in subs:
+        if sub_type in ('validity', 'all', 'language', 'custom_story', 'extra_episode'):
+            if expiry:
+                try:
+                    expiry_dt = datetime.fromisoformat(expiry)
+                    if now <= expiry_dt:
+                        general_validity_active = True
+                        break
+                    else:
+                        has_expired = True
+                except:
+                    general_validity_active = True
+                    break
+            else:
+                general_validity_active = True
+                break
+
+    if not general_validity_active:
+        return False, "Subscription Expired Renew it" if has_expired else "You are not authorized to use this bot."
     
     is_general_check = (show_id is None and language is None)
 
@@ -162,39 +183,23 @@ def is_allowed(update, show_id=None, language=None):
             is_blocked = True
             break
 
+    if is_blocked:
+        return False, "This story is blocked for your account."
+
     final_allow = False
     for sub_type, sub_data, expiry in subs:
-        # Check Type Matching first
-        match = False
         if is_general_check:
-            match = True
+            final_allow = True
+            break
         elif sub_type == 'all':
-            match = True
+            final_allow = True
+            break
         elif sub_type == 'selected_story':
             if show_id and sub_data and show_id == sub_data:
-                match = True
+                final_allow = True
+                break
         elif sub_type == 'language':
             if language and sub_data and language.lower() == sub_data.lower():
-                match = True
-        
-        if match:
-            has_valid_type = True
-            if expiry:
-                try:
-                    expiry_dt = datetime.fromisoformat(expiry)
-                    if now <= expiry_dt:
-                        if is_blocked:
-                            return False, "This story is blocked for your account."
-                        final_allow = True
-                        break
-                    else:
-                        has_expired = True
-                except:
-                    continue
-            else:
-                # Lifetime
-                if is_blocked:
-                    return False, "This story is blocked for your account."
                 final_allow = True
                 break
                 
@@ -205,10 +210,4 @@ def is_allowed(update, show_id=None, language=None):
             db.update_buyer_group(chat_id, chat_title, chat_username, user_id)
         return True, None
     
-    if has_expired:
-        return False, "Subscription Expired Renew it"
-    
-    if has_valid_type:
-         return False, "You are not authorized to access this story."
-         
-    return False, "You are not authorized to use this bot."
+    return False, "You are not authorized to access this story."
