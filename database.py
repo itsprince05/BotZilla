@@ -65,6 +65,11 @@ class Database:
             last_used DATETIME DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (chat_id, user_id)
         )''')
+        try:
+            cursor.execute("ALTER TABLE buyer_groups ADD COLUMN first_seen DATETIME DEFAULT CURRENT_TIMESTAMP")
+        except sqlite3.OperationalError:
+            pass
+            
         self.conn.commit()
         cursor.close()
         logger.info("SQLite Database initialized")
@@ -341,20 +346,20 @@ class Database:
                                VALUES (?, ?, ?, ?)
                                ON CONFLICT(chat_id, user_id) DO UPDATE SET 
                                chat_title=excluded.chat_title, 
-                               chat_username=excluded.chat_username,
-                               last_used=CURRENT_TIMESTAMP''', 
+                               chat_username=excluded.chat_username''', 
                             (chat_id, chat_title, chat_username, user_id))
         self.conn.commit()
 
     def get_all_buyer_groups(self):
-        self.cursor.execute('''SELECT chat_id, chat_title, chat_username, user_id FROM buyer_groups ORDER BY last_used DESC''')
+        self.cursor.execute('''SELECT chat_id, chat_title, chat_username, user_id, first_seen FROM buyer_groups ORDER BY first_seen DESC''')
         rows = self.cursor.fetchall()
         groups = {}
         for r in rows:
-            cid, title, uname, uid = r
+            cid, title, uname, uid, fseen = r
             if cid not in groups:
-                groups[cid] = {"title": title, "username": uname, "buyers": []}
+                groups[cid] = {"title": title, "username": uname, "buyers": [], "first_seen": fseen}
             groups[cid]["buyers"].append(uid)
+            
         return groups
 
 db = Database()
