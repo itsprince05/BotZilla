@@ -867,6 +867,7 @@
             list.style.flexDirection = 'column';
             list.style.gap = '0';
             list.style.padding = '0';
+            list.style.background = 'transparent';
             
             let html = '';
             rules.forEach((rule, index) => {
@@ -911,7 +912,7 @@
                 let borderBottom = isLast ? 'none' : '1px solid #eee';
                 
                 // Background & Shadow
-                const cardBg = isDropdownOpen ? '#ffffff' : 'transparent';
+                const cardBg = '#ffffff';
                 const cardShadow = `box-shadow: inset 4px 0 0 0 ${indicatorColor}; position: relative; z-index: ${isDropdownOpen ? '10' : '1'};`;
                 
                 const iconTransform = isDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)';
