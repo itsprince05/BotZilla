@@ -224,7 +224,7 @@ class Database:
         return self.cursor.fetchone()
         
     def get_user_validity(self, user_id):
-        self.cursor.execute("SELECT expiry FROM subscriptions WHERE user_id = ?", (user_id,))
+        self.cursor.execute("SELECT expiry FROM subscriptions WHERE user_id = ? AND sub_type IN ('validity', 'all', 'language', 'custom_story', 'extra_episode')", (user_id,))
         subs = self.cursor.fetchall()
         if not subs:
             return "No Active Subscription"
@@ -252,16 +252,28 @@ class Database:
         from datetime import timezone, timedelta
         ist = timezone(timedelta(hours=5, minutes=30))
         now = datetime.now(ist)
+        
+        general_validity_active = False
+        
         for sub_type, sub_data, expiry in subs:
-            # Check Expiry
-            if expiry:
-                try:
-                    expiry_dt = datetime.fromisoformat(expiry)
-                    if now > expiry_dt:
-                        continue
-                except:
-                    continue
-
+            if sub_type in ('validity', 'all', 'language', 'custom_story', 'extra_episode'):
+                if expiry:
+                    try:
+                        expiry_dt = datetime.fromisoformat(expiry)
+                        if now <= expiry_dt:
+                            general_validity_active = True
+                            break
+                    except:
+                        general_validity_active = True
+                        break
+                else:
+                    general_validity_active = True
+                    break
+                    
+        if not general_validity_active:
+            return False
+            
+        for sub_type, sub_data, expiry in subs:
             if sub_type == 'all':
                 return True
             elif sub_type == 'selected_story':
