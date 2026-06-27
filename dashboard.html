@@ -462,7 +462,7 @@
                         const titleColor = isDummy ? 'color: #999;' : 'color: #1c1e21;';
                         const subColor = isDummy ? 'color: #bbb;' : 'color: #666;';
 
-                        const bgStyle = data.is_expired ? 'background: linear-gradient(to right, #fde3e1, #ffffff, #ffffff, #ffffff); box-shadow: inset 4px 0 0 0 #f44336;' : 'background: linear-gradient(to right, #e4f3e5, #ffffff, #ffffff, #ffffff); box-shadow: inset 4px 0 0 0 #4CAF50;';
+                        const bgStyle = data.is_expired ? 'background: linear-gradient(to right, #fde3e1, #ffffff); box-shadow: inset 4px 0 0 0 #f44336;' : 'background: linear-gradient(to right, #e4f3e5, #ffffff); box-shadow: inset 4px 0 0 0 #4CAF50;';
                         container.innerHTML += `
                         <div class="list-card" style="cursor: pointer; ${bgStyle}" 
                              oncontextmenu="event.preventDefault(); showDeletePopup('${uid}', 'buyer', '${name.replace(/'/g, "\\'")}'); return false;"
@@ -521,7 +521,7 @@
                         let bgStyle = '';
                         if (isBuyer) {
                             const isExpired = buyers[uid].is_expired;
-                            bgStyle = isExpired ? 'background: linear-gradient(to right, #fde3e1, #ffffff, #ffffff, #ffffff); box-shadow: inset 4px 0 0 0 #f44336;' : 'background: linear-gradient(to right, #e4f3e5, #ffffff, #ffffff, #ffffff); box-shadow: inset 4px 0 0 0 #4CAF50;';
+                            bgStyle = isExpired ? 'background: linear-gradient(to right, #fde3e1, #ffffff); box-shadow: inset 4px 0 0 0 #f44336;' : 'background: linear-gradient(to right, #e4f3e5, #ffffff); box-shadow: inset 4px 0 0 0 #4CAF50;';
                         } else {
                             bgStyle = 'background: #ffffff;';
                         }
@@ -666,13 +666,13 @@
                             const titleColor = bName === 'Unknown' ? 'color: #999;' : 'color: #1c1e21;';
                             const subColor = bName === 'Unknown' ? 'color: #bbb;' : 'color: #666;';
                             let borderColor = '#4CAF50';
-                            let cardBg = 'linear-gradient(to right, #e4f3e5, #ffffff, #ffffff, #ffffff)';
+                            let cardBg = 'linear-gradient(to right, #e4f3e5, #ffffff)';
                             if (b.is_buyer === false) {
                                 borderColor = '#ffffff';
                                 cardBg = '#ffffff';
                             } else if (b.is_expired) {
                                 borderColor = '#f44336';
-                                cardBg = 'linear-gradient(to right, #fde3e1, #ffffff, #ffffff, #ffffff)';
+                                cardBg = 'linear-gradient(to right, #fde3e1, #ffffff)';
                             }
                             
                             buyersHtml += `
