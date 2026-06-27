@@ -18,11 +18,11 @@ flask_app.secret_key = os.urandom(24)
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
 
-DASHBOARD_PASSWORD = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+DASHBOARD_PASSWORD = ''.join(random.choices(string.ascii_letters + string.digits, k=20))
 
 def update_password():
     global DASHBOARD_PASSWORD
-    DASHBOARD_PASSWORD = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+    DASHBOARD_PASSWORD = ''.join(random.choices(string.ascii_letters + string.digits, k=20))
     return DASHBOARD_PASSWORD
 
 def get_avatar_v(uid):
