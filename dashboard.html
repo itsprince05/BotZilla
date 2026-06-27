@@ -464,7 +464,7 @@
 
                         const bgStyle = data.is_expired ? 'background: linear-gradient(to right, #fde3e1, #ffffff); box-shadow: inset 4px 0 0 0 #f44336;' : 'background: linear-gradient(to right, #e4f3e5, #ffffff); box-shadow: inset 4px 0 0 0 #4CAF50;';
                         container.innerHTML += `
-                        <div class="list-card" style="cursor: pointer; ${bgStyle}" 
+                        <div class="list-card" style="cursor: pointer; padding-left: 9px; ${bgStyle}" 
                              oncontextmenu="event.preventDefault(); showDeletePopup('${uid}', 'buyer', '${name.replace(/'/g, "\\'")}'); return false;"
                              ontouchstart="startLongPress(event, '${uid}', 'buyer', '${name.replace(/'/g, "\\'")}')" 
                              ontouchend="cancelLongPress(event)" 
@@ -527,7 +527,7 @@
                         }
 
                         container.innerHTML += `
-                        <div class="list-card" style="${bgStyle}; cursor: pointer;"
+                        <div class="list-card" style="${bgStyle}; cursor: pointer; padding-left: ${isBuyer ? '9px' : '10px'};"
                              onclick="window.location.href='${isBuyer ? '/user/' + uid : '/new_buyer/' + uid}'">
                             <div style="display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden;">
                                 ${userData.avatar_v > 0 
@@ -676,7 +676,7 @@
                             }
                             
                             buyersHtml += `
-                                <div class="list-card" style="margin: 0; padding: 10px; box-shadow: inset 4px 0 0 0 ${borderColor}; cursor: pointer; background: ${cardBg}; border-radius: 0; border: none; border-bottom: 1px solid #eee;" onclick="window.location.href='/user/${b.user_id}'">
+                                <div class="list-card" style="margin: 0; padding: 10px 10px 10px 9px; box-shadow: inset 4px 0 0 0 ${borderColor}; cursor: pointer; background: ${cardBg}; border-radius: 0; border: none; border-bottom: 1px solid #eee;" onclick="window.location.href='/user/${b.user_id}'">
                                     <div style="display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden;">
                                     ${b.avatar_v > 0 
                                         ? `<img src="/api/avatars/${b.user_id}?_t=${b.avatar_v}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
