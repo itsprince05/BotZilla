@@ -923,16 +923,15 @@
                 
                 // Background & Shadow
                 const cardBg = '#ffffff';
-                const cardShadow = `position: relative; z-index: ${isDropdownOpen ? '10' : '1'};`;
+                const cardShadow = `box-shadow: inset 4px 0 0 0 ${indicatorColor}; position: relative; z-index: ${isDropdownOpen ? '10' : '1'};`;
                 
                 const iconTransform = isDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)';
                 const dropdownDisplay = isDropdownOpen ? 'block' : 'none';
 
                 html += `
-                <div id="card-${rule.show_id}" class="list-card" style="background: ${cardBg}; margin: ${margin}; ${cardRadius} border-top: ${borderTop}; border-bottom: ${borderBottom}; border-right: ${borderRight}; border-left: 1px solid #e0e0e0; ${cardShadow} padding: 10px; display: flex; flex-direction: column; text-align: left; align-items: stretch; transition: margin 0.2s, border-radius 0.2s, box-shadow 0.2s; box-sizing: border-box;">
-                    <div style="display: flex; align-items: stretch; justify-content: space-between; text-align: left; cursor: pointer;" onclick="toggleCustomDropdown('${rule.show_id}')">
-                        <div style="width: 4px; border-radius: 0; background: ${indicatorColor}; margin-right: 10px; flex-shrink: 0;"></div>
-                        <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding-right: 10px; text-align: left; padding-top: 2px; padding-bottom: 2px;">
+                <div id="card-${rule.show_id}" class="list-card" style="background: ${cardBg}; margin: ${margin}; ${cardRadius} border-top: ${borderTop}; border-bottom: ${borderBottom}; border-right: ${borderRight}; border-left: none; ${cardShadow} padding: 10px; display: flex; flex-direction: column; text-align: left; align-items: stretch; transition: margin 0.2s, border-radius 0.2s, box-shadow 0.2s; box-sizing: border-box;">
+                    <div style="display: flex; align-items: flex-start; justify-content: space-between; text-align: left; cursor: pointer;" onclick="toggleCustomDropdown('${rule.show_id}')">
+                        <div style="flex: 1; overflow: hidden; display: flex; flex-direction: column; padding-right: 10px; text-align: left;">
                             <div class="list-title" style="white-space: normal; word-break: break-word; font-weight: 600; line-height: 1.3; text-align: left;">${rule.title}</div>
                             ${labelsHtml}
                         </div>
