@@ -374,13 +374,14 @@ class PFMDownloader:
                             else: on_start(seq_num, raw_name)
                         except: pass
                         
-                    name = re.sub(r'[\\/*?:"<>|]', '', raw_name)
+                    name = re.sub(r'[^\w\s\-,.\']', '', raw_name)
                     name = re.sub(r'\s+', ' ', name).strip()
                     
                     mpd = ep[1]
                     duration = ep[3] if len(ep) > 3 else 0
                     
-                    clean_name = re.sub(r'^(?:Ep|Episode|E)[\s\-.:,]*\d+[\s\-.:,]*', '', name, flags=re.IGNORECASE).strip()
+                    clean_name = re.sub(r'^(?:(?:Ep|Episode|E|Ch|Chapter|C)[\s\-.:,]*\d+[\s\-.:,]*)+', '', name, flags=re.IGNORECASE).strip()
+                    clean_name = re.sub(r'^\d+[\s\-.:,]+', '', clean_name).strip()
                     if clean_name:
                         filename = f"Ep {seq_num} - {clean_name}.m4a"
                     else:
