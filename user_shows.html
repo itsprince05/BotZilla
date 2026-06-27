@@ -914,8 +914,7 @@
                 if (isDropdownOpen || isFirst || prevOpen) radiusTop = '10px';
                 if (isDropdownOpen || isLast || nextOpen) radiusBottom = '10px';
                 
-                // Left side is always 0 to keep the bar rectangular
-                const cardRadius = `border-radius: 0 ${radiusTop} ${radiusBottom} 0;`;
+                const cardRadius = `border-radius: ${radiusTop} ${radiusTop} ${radiusBottom} ${radiusBottom};`;
                 
                 // Border logic
                 const borderRight = '1px solid #e0e0e0';
@@ -924,9 +923,7 @@
                 
                 // Background & Shadow
                 const cardBg = '#ffffff';
-                const cardShadow = isDropdownOpen 
-                    ? `box-shadow: inset 4px 0 0 0 ${indicatorColor}, 0 4px 12px rgba(0,0,0,0.05); z-index: 10; position: relative;` 
-                    : `box-shadow: inset 4px 0 0 0 ${indicatorColor}; z-index: 1; position: relative;`;
+                const cardShadow = `box-shadow: inset 4px 0 0 0 ${indicatorColor}; position: relative; z-index: ${isDropdownOpen ? '10' : '1'};`;
                 
                 const iconTransform = isDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)';
                 const dropdownDisplay = isDropdownOpen ? 'block' : 'none';
