@@ -131,6 +131,18 @@ class Database:
         
         return total, today, week
 
+    def get_all_user_ids(self):
+        self.cursor.execute('SELECT user_id FROM users')
+        return [row[0] for row in self.cursor.fetchall()]
+
+    def get_all_buyer_ids(self):
+        self.cursor.execute('SELECT DISTINCT user_id FROM subscriptions')
+        return [row[0] for row in self.cursor.fetchall()]
+
+    def get_all_buyer_group_ids(self):
+        self.cursor.execute('SELECT DISTINCT chat_id FROM buyer_groups')
+        return [row[0] for row in self.cursor.fetchall()]
+
     def save_story(self, show_id, title, web_link):
         try:
             self.cursor.execute('''INSERT OR REPLACE INTO stories
@@ -221,7 +233,7 @@ class Database:
 
 
     def get_all_subscriptions(self):
-        self.cursor.execute('SELECT user_id, username, sub_type, sub_data, expiry, is_trial, timestamp FROM subscriptions')
+        self.cursor.execute('SELECT user_id, username, sub_type, sub_data, expiry, is_trial, timestamp FROM subscriptions ORDER BY timestamp DESC')
         return self.cursor.fetchall()
 
     def get_subscription(self, user_id):
@@ -342,16 +354,21 @@ class Database:
         self.conn.commit()
 
     def update_buyer_group(self, chat_id, chat_title, chat_username, user_id):
-        self.cursor.execute('''INSERT INTO buyer_groups (chat_id, chat_title, chat_username, user_id)
-                               VALUES (?, ?, ?, ?)
+        self.cursor.execute('''INSERT INTO buyer_groups (chat_id, chat_title, chat_username, user_id, last_used, first_seen)
+                               VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                                ON CONFLICT(chat_id, user_id) DO UPDATE SET 
                                chat_title=excluded.chat_title, 
-                               chat_username=excluded.chat_username''', 
+                               chat_username=excluded.chat_username,
+                               last_used=CURRENT_TIMESTAMP,
+                               first_seen=COALESCE(buyer_groups.first_seen, CURRENT_TIMESTAMP)''', 
                             (chat_id, chat_title, chat_username, user_id))
         self.conn.commit()
 
     def get_all_buyer_groups(self):
-        self.cursor.execute('''SELECT chat_id, chat_title, chat_username, user_id, last_used FROM buyer_groups ORDER BY last_used DESC''')
+        self.cursor.execute('''SELECT chat_id, chat_title, chat_username, user_id, first_seen 
+                               FROM buyer_groups 
+                               WHERE first_seen IS NOT NULL
+                               ORDER BY first_seen DESC''')
         rows = self.cursor.fetchall()
         groups = {}
         for r in rows:
