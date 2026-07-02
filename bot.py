@@ -752,7 +752,7 @@ async def download_avatar_bg(uid, client):
 async def start(client, message):
     if message.chat.id == Config.ADMIN_GROUP:
         return await message.reply(
-            "Rio Rio Downloader\n\n"
+            "BotZilla Downloader\n\n"
             "For Admins...\n"
             "/dashboard Dashboard URL\n"
             "/broadcast Send Message\n"
