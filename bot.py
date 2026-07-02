@@ -1,4 +1,5 @@
 import os
+import html as html_module
 import time
 import asyncio
 import re
@@ -151,6 +152,8 @@ user_queues = {}
 cancel_flags = {}
 gen_state = {}
 user_processes = {}  # Per-user process tracking for cancel
+stop_messages = {}  # Track "Stopping process..." messages for edit
+active_tasks = {}  # Track asyncio tasks for instant cancel
 expired_notified = set()
 
 
@@ -244,8 +247,7 @@ async def fast_upload(chat_id, filepath, title, artist, duration, thumb_path=Non
     data.add_field('title', title)
     data.add_field('performer', artist)
     data.add_field('duration', str(duration))
-    data.add_field('caption', f"{title}")
-    data.add_field('parse_mode', 'Markdown')
+    data.add_field('caption', title)
     
     audio_file = open(filepath, 'rb')
     data.add_field('audio', audio_file, filename=os.path.basename(filepath))
@@ -362,16 +364,56 @@ async def set_cmds(client):
     except Exception as e:
         logger.error(f"Cmd error: {e}")
 
-def get_show_markup(user_id, show_id):
-    if db.check_user_show(user_id, show_id):
-        save_btn = InlineKeyboardButton("Remove from Saved", callback_data=f"unsave_{show_id}")
+def build_saved_markup(shows, page=1):
+    import math
+    per_page = 15
+    total_shows = len(shows)
+    total_pages = math.ceil(total_shows / per_page)
+    if total_pages == 0: total_pages = 1
+    
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    current_shows = shows[start_idx:end_idx]
+    
+    buttons = []
+    for s_id, title in current_shows:
+        buttons.append([InlineKeyboardButton(text=f"{title}", callback_data=f"show_{s_id}_saved")])
+        
+    if total_pages > 1:
+        nav_buttons = []
+        if page > 1:
+            nav_buttons.append(InlineKeyboardButton(text="Prev", callback_data=f"savedpage_{page - 1}"))
+            
+        nav_buttons.append(InlineKeyboardButton(text=f"Page {page}/{total_pages}", callback_data="ignore"))
+        
+        if page < total_pages:
+            nav_buttons.append(InlineKeyboardButton(text="Next", callback_data=f"savedpage_{page + 1}"))
+            
+        buttons.append(nav_buttons)
+        
+    return InlineKeyboardMarkup(buttons)
+
+def get_show_markup(user_id, show_id, is_from_saved=False):
+    if is_from_saved:
+        if db.check_user_show(user_id, show_id):
+            save_btn = InlineKeyboardButton("Delete", callback_data=f"unsave_{show_id}")
+        else:
+            save_btn = InlineKeyboardButton("Save", callback_data=f"save_{show_id}")
+            
+        back_btn = InlineKeyboardButton("Back", callback_data="back_to_saved")
+        last_row = [back_btn, save_btn]
     else:
-        save_btn = InlineKeyboardButton("Save Story", callback_data=f"save_{show_id}")
+        if db.check_user_show(user_id, show_id):
+            save_btn = InlineKeyboardButton("Delete From Saved", callback_data=f"unsave_{show_id}")
+        else:
+            save_btn = InlineKeyboardButton("Save Story", callback_data=f"save_{show_id}")
+            
+        last_row = [save_btn]
         
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("All Episodes", callback_data=f"all_{show_id}")],
         [InlineKeyboardButton("Select Episode", callback_data=f"multiple_{show_id}")],
-        [save_btn]
+        last_row
     ])
 
 group_avatars_cache = {}
@@ -398,13 +440,31 @@ async def download_group_avatar_bg(chat_id, client):
     except Exception as e:
         logger.error(f"Failed to download group avatar for {chat_id}: {e}")
 
-# Custom filter to restrict bot access to authorized/subscribed users only
 async def check_auth_filter(_, client, update):
     allowed, _ = is_allowed(update)
     if allowed:
-        chat_id = getattr(update.chat, "id", 0) if hasattr(update, "chat") and update.chat else 0
-        if chat_id < 0:
+        chat = getattr(update, "chat", None)
+        user = getattr(update, "from_user", None)
+        
+        # Fallback to message chat if available
+        if not chat and hasattr(update, "message") and update.message:
+            chat = update.message.chat
+            
+        chat_id = chat.id if chat else 0
+        
+        # Always update user info if present
+        if user:
+            db.add_user(user.id, user.username, user.first_name)
+            asyncio.create_task(download_avatar_bg(user.id, client))
+            
+        if chat_id < 0 and chat:
+            chat_title = chat.title or "Unknown Group"
+            chat_username = chat.username or ""
+            uid = user.id if user else 0
+            if uid:
+                db.update_buyer_group(chat_id, chat_title, chat_username, uid)
             asyncio.create_task(download_group_avatar_bg(chat_id, client))
+            
     return allowed
 
 auth_filter = filters.create(check_auth_filter)
@@ -499,6 +559,41 @@ async def dashboard_cmd(client, message):
         await m.edit(f"Dashboard URL...\n\n`{pwd}`\n\n{tunnel_url}")
     else:
         await m.edit("Failed to generate a new URL. Try again later...")
+
+@app.on_message(filters.command("broadcast") & ~filters.bot)
+async def broadcast_cmd(client, message):
+    if message.chat.id != Config.ADMIN_GROUP:
+        return
+        
+    uid = message.from_user.id
+    is_admin = False
+    if uid in Config.OWNER_IDS:
+        is_admin = True
+    else:
+        try:
+            member = await client.get_chat_member(message.chat.id, uid)
+            if member.status in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
+                is_admin = True
+        except:
+            pass
+            
+    if not is_admin:
+        return await message.reply("Unauthorized Access...")
+        
+    if not message.reply_to_message:
+        return await message.reply("Reply to a text msg or media...")
+        
+    markup = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("All Users", callback_data="bc_all"),
+            InlineKeyboardButton("Only Buyers", callback_data="bc_buyers")
+        ],
+        [InlineKeyboardButton("Only Buyers & Groups", callback_data="bc_buyers_groups")],
+        [InlineKeyboardButton("All Users & Groups", callback_data="bc_all_groups")],
+        [InlineKeyboardButton("Cancel", callback_data="bc_cancel")]
+    ])
+    
+    await message.reply("Select where you want to broadcast...", reply_markup=markup)
 
 @app.on_message(filters.command("backup") & ~filters.bot)
 async def backup_cmd(client, message):
@@ -635,7 +730,15 @@ async def restore_cmd(client, message):
         await m.edit(f"Restore failed: {e}")
 
 
+last_user_avatar_check = {}
+
 async def download_avatar_bg(uid, client):
+    import time
+    now = time.time()
+    if now - last_user_avatar_check.get(uid, 0) < 60:
+        return
+    last_user_avatar_check[uid] = now
+
     avatar_path = os.path.join("avatars", f"{uid}.jpg")
     os.makedirs("avatars", exist_ok=True)
     try:
@@ -652,11 +755,13 @@ async def start(client, message):
             "BotZilla Downloader\n\n"
             "For Admins...\n"
             "/dashboard Dashboard URL\n"
+            "/broadcast Send Message\n"
             "/backup Backup database\n"
             "/restart Restart bot\n\n"
             "For Owner Only...\n"
             "/update Pull and restart\n"
-            "/restore Restore database"
+            "/restore Restore database\n"
+            "/auth Get cookies"
         )
     await set_cmds(client)
     if message.from_user:
@@ -773,6 +878,22 @@ async def start(client, message):
 async def debug_cmd(client, message):
     if message.chat.id != Config.ADMIN_GROUP:
         return
+        
+    uid = message.from_user.id
+    is_admin = False
+    if uid in Config.OWNER_IDS:
+        is_admin = True
+    else:
+        try:
+            member = await client.get_chat_member(message.chat.id, uid)
+            if member.status in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
+                is_admin = True
+        except:
+            pass
+            
+    if not is_admin:
+        return await message.reply("Unauthorized Access...")
+        
     text = message.text.split(" ")
     if len(text) > 1:
         if text[1].lower() == "on":
@@ -787,13 +908,15 @@ async def debug_cmd(client, message):
         current = db.get_setting("debug_mode", "off")
         await message.reply(f"Debug mode is currently {current}...")
 
-@app.on_message(filters.command("get_auth") & auth_filter & ~filters.bot)
-async def get_auth_cmd(client, message):
+@app.on_message(filters.command("auth") & auth_filter & ~filters.bot)
+async def auth_cmd(client, message):
     if message.chat.id != Config.ADMIN_GROUP:
         return
     uid = message.from_user.id
     if uid not in Config.OWNER_IDS:
         return await message.reply("Unauthorized Access...")
+        
+    m = await message.reply("Getting cookies...")
     
     token = downloader.token.get('auth-token', 'Not Found')
     
@@ -816,22 +939,18 @@ async def get_auth_cmd(client, message):
             
             netscape_cookies += f"{domain}\t{flag}\t{path}\t{secure}\t{expiry}\t{cookie.name}\t{cookie.value}\n"
     
-    expiry_text = "Never"
-    if earliest_expiry:
-        expiry_text = datetime.fromtimestamp(earliest_expiry).strftime('%Y-%m-%d %I:%M:%S %p')
-
     with open("cookies.txt", "w") as f:
         f.write(netscape_cookies)
     
     await message.reply_document(
         "cookies.txt", 
         caption=(
-            f"PocketFM Auth Info\n\n"
-            f"Auth Token:\n`{token}`\n\n"
-            f"Earliest Cookie Expiry:\n`{expiry_text}`\n\n"
-            f"_Cookies sent in Netscape format_"
+            f"PocketFM Auth Info...\n\n"
+            f"Access Token...\n`{token}`\n\n"
+            f"Cookies sent in Netscape format..."
         )
     )
+    await m.delete()
     if os.path.exists("cookies.txt"):
         os.remove("cookies.txt")
 
@@ -904,15 +1023,20 @@ async def d_artist(client, message):
 async def saved_cmd(client, message):
     uid = message.from_user.id
     shows = db.get_user_shows(uid)
-    if not shows:
-        return await message.reply("You haven't saved any stories yet...")
     
-    buttons = []
-    for show_id, title in shows:
-        buttons.append([
-            InlineKeyboardButton(text=f"{title}", callback_data=f"show_{show_id}")
-        ])
-    await message.reply("Your Saved Stories...", reply_markup=InlineKeyboardMarkup(buttons))
+    if not shows:
+        return await message.reply("0 Saved Story...\n\nSend story URL and save it for faster access...")
+    
+    # Sort A-Z by title
+    shows = sorted(shows, key=lambda x: (x[1] or "").lower())
+    count = len(shows)
+    
+    if count == 1:
+        header = "1 Saved Story...\n\nChoose below..."
+    else:
+        header = f"{count} Saved Stories...\n\nChoose below..."
+    
+    await message.reply(header, reply_markup=build_saved_markup(shows, page=1))
 
 
 @app.on_message(filters.command(["stop", "cancel"]) & auth_filter & ~filters.bot)
@@ -928,15 +1052,33 @@ async def cancel_cmd(client, message):
             for proc in procs:
                 try: proc.kill()
                 except: pass
-            user_processes[uid] = []
         except Exception as e:
             logger.error(f"Error killing processes: {e}")
 
-        # Clear user's waiting queue
-        if uid in user_queues:
-            user_queues[uid].clear()
+        # Immediately clear state so user is free to start new tasks
+        # Keep cancel_flags[uid] = True so background task detects it and stops
+        active_downloads.pop(uid, None)
+        user_queues.pop(uid, None)
+        user_processes.pop(uid, None)
         
-        await message.reply("Stopping process...")
+        # Clear per-user UI state to prevent ghost auto-downloads
+        chat_id = message.chat.id
+        user_show.pop(chat_id, None)
+        user_awaiting_range.pop(chat_id, None)
+        user_is_all_download.pop(chat_id, None)
+        
+        stop_msg = await message.reply("Stopping process...")
+        
+        # Forcefully cancel the background task to make it instant
+        task = active_tasks.get(uid)
+        if task:
+            task.cancel()
+            
+        # Edit the message almost instantly
+        try:
+            await asyncio.sleep(0.5)
+            await stop_msg.edit("Stopping process...\n\nProcess stopped and waiting list is cleared...")
+        except: pass
     else:
         # Force-clean any leftover ghost state just in case
         active_downloads.pop(uid, None)
@@ -1087,7 +1229,7 @@ async def handle_messages(client, message):
         db.save_story(show_id, show_info['title'], f"https://www.pocketfm.com/show/{show_id}")
         user_show[chat_id] = show_id
         
-        markup = get_show_markup(uid, show_id)
+        markup = get_show_markup(uid, show_id, is_from_saved=False)
         if show_info.get("image"):
             await client.send_photo(chat_id, photo=show_info["image"], caption=caption, reply_markup=markup)
         else:
@@ -1107,6 +1249,10 @@ async def handle_messages(client, message):
                     if os.path.exists(file_name): os.remove(file_name)
                 downloader.last_debug_info[show_id] = []
         return
+
+    # Handle non-numeric input when awaiting episode range
+    if chat_id in user_show and user_awaiting_range.get(chat_id) and not re.match(r'^[0-9,\- ]+$', text):
+        return await message.reply("Invalid episode number...\n\nSend episode number which you want to download...\n\nSingle 1\nMultiple 1 10")
 
     # Handle Episode Range
     if chat_id in user_show and user_awaiting_range.get(chat_id) and re.match(r'^[0-9,\- ]+$', text):
@@ -1132,15 +1278,6 @@ async def handle_messages(client, message):
             return await message.reply(invalid_msg)
 
         start_seq, end_seq = min(episodes), max(episodes)
-        
-        try:
-            show_info = await downloader.get_show_info(show_id, info_level=get_user_info_level(uid, show_id))
-            if show_info and 'total_episodes' in show_info:
-                if end_seq > show_info['total_episodes']:
-                    user_awaiting_range[chat_id] = True
-                    return await message.reply(invalid_msg)
-        except Exception as e:
-            logger.error(f"Error checking total episodes: {e}")
 
         is_all = user_is_all_download.pop(chat_id, False)
         
@@ -1171,6 +1308,8 @@ async def handle_messages(client, message):
             active_downloads[chat_id] = True
             
         task_counter = 0
+        _cleanup_done = False
+        active_tasks[uid] = asyncio.current_task()
 
         try:
             while user_queues[uid]:
@@ -1236,35 +1375,48 @@ async def handle_messages(client, message):
                 cancel_flags[uid] = False
                 discovered_episodes = set()
                 successful_uploads = 0
+                successful_downloads = 0
+                download_failed_eps = []
+                upload_failed_eps = []
+                episode_titles = {}
                 thumb_path = os.path.join(THUMB_DIR, f"{uid}.jpg")
                 thumb = thumb_path if os.path.exists(thumb_path) else None
                 artist_path = os.path.join(ARTIST_DIR, f"{uid}.txt")
 
-                upload_queue = asyncio.Queue(maxsize=1)
+                upload_queue = asyncio.Queue()
                 semaphore = asyncio.Semaphore(1)
                 discovery_done_event = asyncio.Event()
                 
-                msg_objs = {}
                 locked_episodes = set()
                 episode_lock = asyncio.Lock()
+                msg_objs = {}
+                msg_states = {}
                 
                 async def perform_upload(task_data):
-                    nonlocal successful_uploads
-                    seq, filepath, duration = task_data
+                    nonlocal successful_uploads, successful_downloads
+                    seq, filepath, duration = task_data[:3]
+                    error_reason = task_data[3] if len(task_data) > 3 else None
+                    ep_title = episode_titles.get(seq, f"Ep {seq}")
                     
                     if not filepath:
                         logger.error(f"Download failed upstream for Ep {seq}")
                         pipeline_state["failed"] += 1
+                        download_failed_eps.append(seq)
                         if seq in locked_episodes:
                             episode_lock.release()
                             locked_episodes.remove(seq)
                         semaphore.release()
-                        if seq in msg_objs:
-                            try: await msg_objs[seq].delete()
-                            except: pass
-                            del msg_objs[seq]
+                        if error_reason == "not_found":
+                            # search_callback already edited msg to "Ep - N not found..."
+                            # Just leave it as-is, no delete or extra msg needed
+                            pass
+                        else:
+                            # Delete downloading msg and send error
+                            asyncio.create_task(bg_delete(seq))
+                            await bg_send_plain(f"Download Error...\n\n{ep_title}")
                         return
 
+                    successful_downloads += 1
                     pipeline_state["status"] = f"Uploading Ep {seq}..."
                     upload_gap = int(db.get_setting("upload_gap", 0))
 
@@ -1279,21 +1431,25 @@ async def handle_messages(client, message):
                         
                         logger.info(f"Aiogram Upload Start for Ep {seq}: {title}")
                         
-                        if seq in msg_objs:
-                            try: await msg_objs[seq].edit(f"Uploading...\n\n{title}")
-                            except: pass
-                            try: await client.send_chat_action(t_chat_id, enums.ChatAction.UPLOAD_AUDIO)
-                            except: pass
+                        # Edit tracked msg to "Uploading..." (fire-and-forget)
+                        asyncio.create_task(bg_edit(seq, f"Uploading...\n\n{ep_title}"))
+                        msg_states[seq] = "Uploading"
                         
+                        # Start upload IMMEDIATELY
                         res_msg = None
-                        for attempt in range(3):
+                        for attempt in range(5):
                             if cancel_flags.get(uid): break
+                            
+                            # Edit retry notification (from 2nd attempt onwards)
+                            if attempt > 0:
+                                asyncio.create_task(bg_edit(seq, f"Uploading...\nTrying {attempt + 1}\n\n{ep_title}"))
+                            
                             try:
                                 file_size = os.path.getsize(filepath) if os.path.exists(filepath) else 0
                                 if file_size > 49 * 1024 * 1024:
                                     logger.info(f"File size {file_size} is > 49MB. Using Pyrogram for upload...")
                                     res_msg = await app.send_audio(
-                                        t_chat_id, audio=filepath, caption=f"{title}",
+                                        t_chat_id, audio=filepath, caption=title,
                                         title=title, performer=artist_name, duration=duration, thumb=thumb
                                     )
                                 else:
@@ -1326,6 +1482,9 @@ async def handle_messages(client, message):
                         else:
                             logger.error(f"Aiogram upload PERMANENTLY FAILED for Ep {seq}")
                             pipeline_state["failed"] += 1
+                            upload_failed_eps.append(seq)
+                            # Fire-and-forget upload error message
+                            asyncio.create_task(bg_send_plain(f"Upload Error...\n\n{ep_title}"))
                         
                         if upload_gap > 0: await asyncio.sleep(upload_gap)
                                     
@@ -1333,10 +1492,9 @@ async def handle_messages(client, message):
                         logger.error(f"Critical error in uploader Ep {seq}: {e}")
                         pipeline_state["failed"] += 1
                     finally:
-                        if seq in msg_objs:
-                            try: await msg_objs[seq].delete()
-                            except: pass
-                            del msg_objs[seq]
+                        if not cancel_flags.get(uid):
+                            # Delete status message after upload (fire-and-forget)
+                            asyncio.create_task(bg_delete(seq))
                         if seq in locked_episodes:
                             episode_lock.release()
                             locked_episodes.remove(seq)
@@ -1346,7 +1504,7 @@ async def handle_messages(client, message):
                     upload_buffer = {}
                     next_seq_idx = 0
                     while True:
-                        if next_seq_idx < len(t_episodes):
+                        if not cancel_flags.get(uid) and next_seq_idx < len(t_episodes):
                             target_seq = t_episodes[next_seq_idx]
                             if target_seq in upload_buffer:
                                 t_data = upload_buffer.pop(target_seq)
@@ -1363,41 +1521,118 @@ async def handle_messages(client, message):
                             task = await asyncio.wait_for(upload_queue.get(), timeout=1.0)
                             if task is None:
                                 upload_queue.task_done()
-                                while next_seq_idx < len(t_episodes):
-                                    target_seq = t_episodes[next_seq_idx]
-                                    if target_seq in upload_buffer:
-                                        t_data = upload_buffer.pop(target_seq)
-                                        await perform_upload(t_data)
-                                    next_seq_idx += 1
+                                if not cancel_flags.get(uid):
+                                    while next_seq_idx < len(t_episodes):
+                                        target_seq = t_episodes[next_seq_idx]
+                                        if target_seq in upload_buffer:
+                                            t_data = upload_buffer.pop(target_seq)
+                                            await perform_upload(t_data)
+                                        next_seq_idx += 1
                                 break
                             
-                            seq, filepath, duration = task
+                            if cancel_flags.get(uid):
+                                upload_queue.task_done()
+                                continue
+                                
+                            seq = task[0]
                             upload_buffer[seq] = task
                             upload_queue.task_done()
                         except asyncio.TimeoutError:
                             pass
 
-                async def download_complete_callback(seq, filepath, duration):
-                    await upload_queue.put((seq, filepath, duration))
-                    pipeline_state["downloaded"] += 1
+                async def download_complete_callback(seq, filepath, duration, error_reason=None):
+                    if cancel_flags.get(uid):
+                        return
+                    await upload_queue.put((seq, filepath, duration, error_reason))
+                    if filepath:
+                        pipeline_state["downloaded"] += 1
 
                 async def discovery_callback(seq):
-                    await semaphore.acquire()
+                    if not cancel_flags.get(uid):
+                        await semaphore.acquire()
                     discovered_episodes.add(seq)
                     pipeline_state["discovered"] += 1
                     
+                async def bg_send(seq, text):
+                    """Send message and track it for later edit/delete (fire-and-forget)"""
+                    try:
+                        msg = await client.send_message(t_chat_id, text)
+                        msg_objs[seq] = msg
+                    except: pass
+
+                async def bg_edit(seq, text):
+                    """Edit tracked message (fire-and-forget)"""
+                    if seq in msg_objs:
+                        try:
+                            await msg_objs[seq].edit(text)
+                        except: pass
+
+                async def bg_delete(seq):
+                    """Delete tracked message (fire-and-forget)"""
+                    if seq in msg_objs:
+                        try:
+                            await msg_objs[seq].delete()
+                        except: pass
+                        msg_objs.pop(seq, None)
+
+                async def bg_send_plain(text):
+                    """Send a standalone message, not tracked (fire-and-forget)"""
+                    try:
+                        await client.send_message(t_chat_id, text)
+                    except: pass
+
                 async def start_download_callback(seq, title):
+                    if cancel_flags.get(uid):
+                        raise asyncio.CancelledError()
                     await episode_lock.acquire()
+                    if cancel_flags.get(uid):
+                        episode_lock.release()
+                        raise asyncio.CancelledError()
                     locked_episodes.add(seq)
                     try:
                         import re
                         clean_title = re.sub(r'^(?:(?:Ep|Episode|E|Ch|Chapter|C)[\s\-.:,]*\d+[\s\-.:,]*)+', '', title, flags=re.IGNORECASE).strip()
                         clean_title = re.sub(r'^\d+[\s\-.:,]+', '', clean_title).strip()
                         display_title = f"Ep {seq} - {clean_title}" if clean_title else f"Ep {seq}"
-                        msg = await client.send_message(t_chat_id, f"Downloading...\n\n{display_title}")
-                        msg_objs[seq] = msg
+                        episode_titles[seq] = display_title
                     except Exception as e:
-                        logger.error(f"Failed to send start msg for Ep {seq}: {e}")
+                        episode_titles[seq] = f"Ep {seq}"
+                        logger.error(f"Failed to process title for Ep {seq}: {e}")
+                    # Send "Downloading..." in background (tracked for later edit/delete)
+                    asyncio.create_task(bg_send(seq, f"Downloading...\n\n{episode_titles[seq]}"))
+                    msg_states[seq] = "Downloading"
+
+                async def download_retry_callback(seq, attempt_num):
+                    """Called when download retries — edits the tracked message"""
+                    ep_title = episode_titles.get(seq, f"Ep {seq}")
+                    asyncio.create_task(bg_edit(seq, f"Downloading...\nTrying {attempt_num}\n\n{ep_title}"))
+
+                async def search_callback(seq, status):
+                    """Called during gap-fill: searching/found/not_found"""
+                    if cancel_flags.get(uid):
+                        raise asyncio.CancelledError()
+                    if status == "searching":
+                        # Wait for any ongoing upload to finish before showing search msg
+                        await episode_lock.acquire()
+                        locked_episodes.add(seq)
+                        if cancel_flags.get(uid):
+                            episode_lock.release()
+                            locked_episodes.discard(seq)
+                            raise asyncio.CancelledError()
+                        asyncio.create_task(bg_send(seq, f"Searching Ep - {seq}"))
+                        msg_states[seq] = "Searching"
+                    elif status == "found":
+                        # Release lock — start_download_callback will re-acquire it
+                        if seq in locked_episodes:
+                            episode_lock.release()
+                            locked_episodes.discard(seq)
+                    elif status == "not_found":
+                        asyncio.create_task(bg_edit(seq, f"Ep - {seq} not found..."))
+                        msg_states[seq] = "NotFound"
+                        # Release lock so next episode can proceed
+                        if seq in locked_episodes:
+                            episode_lock.release()
+                            locked_episodes.discard(seq)
 
                 up_task = asyncio.create_task(upload_worker())
 
@@ -1407,16 +1642,25 @@ async def handle_messages(client, message):
                     if uid not in user_processes:
                         user_processes[uid] = []
                     user_dl_dir = os.path.join(Config.DOWNLOAD_DIR, str(uid))
-                    await downloader.download_episodes(
+                    dl_result = await downloader.download_episodes(
                         t_show_id, min(t_episodes), max(t_episodes), user_dl_dir,
                         progress_callback=discovery_callback, cancel_flag=lambda: cancel_flags.get(uid),
                         on_complete=download_complete_callback, on_start=start_download_callback,
-                        discovery_done=discovery_done_event, info_level='full',
-                        process_tracker=user_processes[uid]
+                        discovery_done=discovery_done_event, info_level=get_user_info_level(uid, t_show_id),
+                        process_tracker=user_processes[uid], on_retry=download_retry_callback,
+                        on_search=search_callback
                     )
                     
                     await upload_queue.put(None)
-                    await up_task
+                    try:
+                        await asyncio.wait_for(up_task, timeout=15)
+                    except asyncio.TimeoutError:
+                        logger.warning(f"Upload worker timed out for user {uid}, force cancelling...")
+                        up_task.cancel()
+                        try:
+                            await up_task
+                        except (asyncio.CancelledError, Exception):
+                            pass
                     
                     if t_chat_id == Config.ADMIN_GROUP:
                         if hasattr(downloader, 'last_debug_info') and t_show_id in downloader.last_debug_info:
@@ -1431,18 +1675,49 @@ async def handle_messages(client, message):
                                 if os.path.exists(file_name): os.remove(file_name)
                             downloader.last_debug_info[t_show_id] = []
                     
-                    if cancel_flags.get(uid):
-                        if uid in user_queues:
-                            user_queues[uid].clear()
-                        await t_msg.reply("Process stopped and waiting list is cleared...")
+                    if cancel_flags.get(uid) or not active_downloads.get(uid):
+                        # cancel_cmd already cleaned up all state
+                        _cleanup_done = True
                         break
-                    elif successful_uploads > 0:
-                        if not user_queues.get(uid):
-                            await t_msg.reply("Task Completed...")
-                            if task_counter > 1:
-                                await t_msg.reply("All Task Completed...")
-                        else:
-                            await t_msg.reply("Task Completed...")
+                    elif dl_result and dl_result.get("abort_reason") == "many_not_found":
+                        total_requested = len(t_episodes)
+                        dl_failed_count = len(download_failed_eps)
+                        dl_failed_nums = f" ({', '.join(str(e) for e in sorted(download_failed_eps))})" if dl_failed_count > 0 else ""
+                        ul_failed_count = len(upload_failed_eps)
+                        ul_failed_nums = f" ({', '.join(str(e) for e in sorted(upload_failed_eps))})" if ul_failed_count > 0 else ""
+                        
+                        summary = (
+                            f"Many episodes are not found for this show, check your episode number and try again...\n\n"
+                            f"Task Completed...\n\n"
+                            f"Total - {total_requested}\n\n"
+                            f"Downloaded - {successful_downloads}\n"
+                            f"Failed - {dl_failed_count}{dl_failed_nums}\n\n"
+                            f"Uploaded - {successful_uploads}\n"
+                            f"Failed - {ul_failed_count}{ul_failed_nums}"
+                        )
+                        await t_msg.reply(summary)
+                    elif successful_uploads > 0 or successful_downloads > 0 or len(download_failed_eps) > 0:
+                        # Build detailed task summary
+                        total_requested = len(t_episodes)
+                        
+                        dl_failed_count = len(download_failed_eps)
+                        dl_failed_nums = f" ({', '.join(str(e) for e in sorted(download_failed_eps))})" if dl_failed_count > 0 else ""
+                        
+                        ul_failed_count = len(upload_failed_eps)
+                        ul_failed_nums = f" ({', '.join(str(e) for e in sorted(upload_failed_eps))})" if ul_failed_count > 0 else ""
+                        
+                        summary = (
+                            f"Task Completed...\n\n"
+                            f"Total - {total_requested}\n\n"
+                            f"Downloaded - {successful_downloads}\n"
+                            f"Failed - {dl_failed_count}{dl_failed_nums}\n\n"
+                            f"Uploaded - {successful_uploads}\n"
+                            f"Failed - {ul_failed_count}{ul_failed_nums}"
+                        )
+                        
+                        await t_msg.reply(summary)
+                        if not user_queues.get(uid) and task_counter > 1:
+                            await t_msg.reply("All Task Completed...")
                     else:
                         error_msg = getattr(downloader, "last_download_error", None)
                         user_name = t_msg.from_user.first_name if t_msg.from_user else "Unknown"
@@ -1473,48 +1748,115 @@ async def handle_messages(client, message):
                 except BaseException as e:
                     # Catches CancelledError, KeyboardInterrupt, SystemExit etc.
                     logger.error(f"Pipeline killed: {type(e).__name__}: {e}")
-                    user_name = t_msg.from_user.first_name if t_msg.from_user else "Unknown"
-                    err_text = (
-                        f"Pipeline Killed...\n\n"
-                        f"`{uid}`\n{user_name}\n\n"
-                        f"`{t_show_id}`\n{story_title}\n\n"
-                        f"Episodes: {ep_text}\n\n"
-                        f"Reason...\n{type(e).__name__}"
-                    )
-                    try:
-                        await client.send_message(Config.ADMIN_GROUP, err_text)
-                    except: pass
+                    
+                    # Cancel upload worker if still running
+                    if up_task and not up_task.done():
+                        up_task.cancel()
+                        try:
+                            await up_task
+                        except (asyncio.CancelledError, Exception):
+                            pass
+                            
+                    # Cancel download workers if still running
+                    for w in getattr(downloader, 'active_workers', []):
+                        if not w.done():
+                            w.cancel()
+                            
+                    if cancel_flags.get(uid):
+                        for c_seq, c_msg in msg_objs.items():
+                            c_state = msg_states.get(c_seq, "Downloading")
+                            c_title = episode_titles.get(c_seq, f"Ep {c_seq}")
+                            if c_state == "Downloading":
+                                asyncio.create_task(bg_edit(c_seq, f"Downloading cancelled by user...\n\n{c_title}"))
+                            elif c_state == "Uploading":
+                                asyncio.create_task(bg_edit(c_seq, f"Uploading cancelled by user...\n\n{c_title}"))
+                            
+                    if not cancel_flags.get(uid) and not isinstance(e, asyncio.CancelledError):
+                        user_name = t_msg.from_user.first_name if t_msg.from_user else "Unknown"
+                        err_text = (
+                            f"Pipeline Killed...\n\n"
+                            f"`{uid}`\n{user_name}\n\n"
+                            f"`{t_show_id}`\n{story_title}\n\n"
+                            f"Episodes: {ep_text}\n\n"
+                            f"Reason...\n{type(e).__name__}"
+                        )
+                        try:
+                            await client.send_message(Config.ADMIN_GROUP, err_text)
+                        except: pass
                     break
         except BaseException as e:
             logger.error(f"Task loop killed: {type(e).__name__}: {e}")
         finally:
-            active_downloads.pop(uid, None)
-            if chat_id != uid:
-                active_downloads.pop(chat_id, None)
+            active_tasks.pop(uid, None)
+            # Always clean cancel_flags (cancel_cmd keeps it set for us to detect)
             cancel_flags.pop(uid, None)
-            user_processes.pop(uid, None)
-            user_queues.pop(uid, None)
+            if not _cleanup_done:
+                active_downloads.pop(uid, None)
+                if chat_id != uid:
+                    active_downloads.pop(chat_id, None)
+                user_processes.pop(uid, None)
+                user_queues.pop(uid, None)
             logger.info(f"Cleanup complete for user {uid}")
-    elif len(text) >= 3 and not text.startswith('/'):
-        results = db.search_stories(text)
-        if results:
-            res_text = f"Search Results for '{text}':"
-            buttons = []
-            for show_id, title in results:
-                buttons.append([InlineKeyboardButton(text=title, callback_data=f"show_{show_id}")])
-            await message.reply(res_text, reply_markup=InlineKeyboardMarkup(buttons))
-        else:
-            return
+    elif len(text) >= 3 and not text.startswith('/') and not re.match(r'^[\d\s\-,]+$', text):
+        import urllib.parse
+        encoded_kw = urllib.parse.quote(text)
+        search_msg = await message.reply(f"Searching...\n\n{text}")
+        
+        url = f"https://api.pocketfm.com/v3/search/universal.search?query={encoded_kw}"
+        headers = {
+            "platform": "android",
+            "device-id": "SBDIHHLLYX3",
+            "app-name": "pocket_fm",
+            "accept": "application/json",
+            "version-name": "9.1.3",
+            "platform-version": "29",
+            "app-version": "2013"
+        }
+        
+        token = downloader.token.get('auth-token')
+        if token:
+            headers["authorization"] = f"Bearer {token}"
+            
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers, timeout=10) as res:
+                    data = await res.json()
+                    shows = data.get("result", {}).get("shows", [])
+                    if not shows:
+                        await search_msg.edit(f"No Shows Found...\n\n{text}")
+                    else:
+                        buttons = []
+                        for s in shows[:7]:
+                            e_id = s.get("entity_id")
+                            t = s.get("title")
+                            if e_id and t:
+                                buttons.append([InlineKeyboardButton(text=t, callback_data=f"show_{e_id}")])
+                        if buttons:
+                            await search_msg.edit(f"Search Result For...\n\n{text}", reply_markup=InlineKeyboardMarkup(buttons))
+                        else:
+                            await search_msg.edit(f"No Shows Found...\n\n{text}")
+        except Exception as e:
+            logger.error(f"Search API error: {e}")
+            await search_msg.edit(f"Search failed due to an error...\n\n{text}")
 
 
 
 @app.on_callback_query(filters.regex(r"^show_") & auth_filter)
 async def show_callback(client, callback_query):
-    show_id = callback_query.data.split("_")[1]
+    parts = callback_query.data.split("_")
+    show_id = parts[1]
+    is_saved = len(parts) > 2 and parts[2] == "saved"
     chat_id = callback_query.message.chat.id
     
-    await callback_query.message.delete()
-    status_msg = await client.send_message(chat_id, "Getting show details...")
+    show_name = "Show"
+    if callback_query.message.reply_markup and callback_query.message.reply_markup.inline_keyboard:
+        for row in callback_query.message.reply_markup.inline_keyboard:
+            for btn in row:
+                if btn.callback_data == callback_query.data:
+                    show_name = btn.text
+                    break
+                    
+    status_msg = await callback_query.message.edit(f"Getting details for...\n\n{show_name}")
     
     show_info = await downloader.get_show_info(show_id, info_level=get_user_info_level(callback_query.from_user.id, show_id))
     if not show_info:
@@ -1541,7 +1883,7 @@ async def show_callback(client, callback_query):
     db.save_story(show_id, show_info['title'], f"https://www.pocketfm.com/show/{show_id}")
     user_show[chat_id] = show_id
     
-    markup = get_show_markup(callback_query.from_user.id, show_id)
+    markup = get_show_markup(callback_query.from_user.id, show_id, is_from_saved=is_saved)
     if show_info.get("image"):
         await client.send_photo(chat_id, photo=show_info["image"], caption=caption, reply_markup=markup)
     else:
@@ -1591,7 +1933,13 @@ async def save_callback(client, callback_query):
     uid = callback_query.from_user.id
     db.save_user_show(uid, show_id)
     try:
-        await callback_query.edit_message_reply_markup(reply_markup=get_show_markup(uid, show_id))
+        is_from_saved = False
+        if callback_query.message.reply_markup:
+            for row in callback_query.message.reply_markup.inline_keyboard:
+                for btn in row:
+                    if btn.text in ("Back", "Save", "Delete"):
+                        is_from_saved = True
+        await callback_query.edit_message_reply_markup(reply_markup=get_show_markup(uid, show_id, is_from_saved))
         await callback_query.answer()
     except: pass
 
@@ -1601,7 +1949,13 @@ async def unsave_callback(client, callback_query):
     uid = callback_query.from_user.id
     db.remove_user_show(uid, show_id)
     try:
-        await callback_query.edit_message_reply_markup(reply_markup=get_show_markup(uid, show_id))
+        is_from_saved = False
+        if callback_query.message.reply_markup:
+            for row in callback_query.message.reply_markup.inline_keyboard:
+                for btn in row:
+                    if btn.text in ("Back", "Save", "Delete"):
+                        is_from_saved = True
+        await callback_query.edit_message_reply_markup(reply_markup=get_show_markup(uid, show_id, is_from_saved))
         await callback_query.answer()
     except: pass
 
@@ -1628,6 +1982,176 @@ async def delsave_callback(client, callback_query):
         await callback_query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
         await callback_query.answer("Removed from saved list.", show_alert=False)
     except: pass
+
+@app.on_callback_query(filters.regex(r"^savedpage_") & auth_filter)
+async def savedpage_callback(client, callback_query):
+    page = int(callback_query.data.split("_")[1])
+    uid = callback_query.from_user.id
+    shows = db.get_user_shows(uid)
+    
+    if not shows:
+        return await callback_query.answer("No saved stories found.", show_alert=True)
+        
+    shows = sorted(shows, key=lambda x: (x[1] or "").lower())
+    count = len(shows)
+    
+    if count == 1:
+        header = "1 Saved Story...\n\nChoose below..."
+    else:
+        header = f"{count} Saved Stories...\n\nChoose below..."
+        
+    try:
+        await callback_query.message.edit_text(header, reply_markup=build_saved_markup(shows, page=page))
+    except:
+        pass
+    await callback_query.answer()
+
+@app.on_callback_query(filters.regex(r"^ignore$"))
+async def ignore_callback(client, callback_query):
+    await callback_query.answer()
+
+@app.on_callback_query(filters.regex(r"^back_to_saved$") & auth_filter)
+async def back_to_saved_callback(client, callback_query):
+    try:
+        await callback_query.message.delete()
+    except:
+        pass
+    
+    uid = callback_query.from_user.id
+    shows = db.get_user_shows(uid)
+    
+    if not shows:
+        await client.send_message(callback_query.message.chat.id, "0 Saved Story...\n\nSend story URL and save it for faster access...")
+        return await callback_query.answer()
+        
+    shows = sorted(shows, key=lambda x: (x[1] or "").lower())
+    count = len(shows)
+    
+    if count == 1:
+        header = "1 Saved Story...\n\nChoose below..."
+    else:
+        header = f"{count} Saved Stories...\n\nChoose below..."
+        
+    await client.send_message(callback_query.message.chat.id, header, reply_markup=build_saved_markup(shows, page=1))
+    await callback_query.answer()
+
+def get_broadcast_text(status, target, btn_text, total_users, user_success, user_failed, total_groups=0, group_success=0, group_failed=0):
+    text = f"{status}...\n{btn_text}\n\n"
+    
+    if target in ["bc_all", "bc_all_groups"]:
+        text += f"Total Users - {total_users}\n"
+    else:
+        text += f"Total Buyers - {total_users}\n"
+        
+    text += f"Success - {user_success}\nFailed - {user_failed}"
+    
+    if target in ["bc_buyers_groups", "bc_all_groups"]:
+        text += f"\n\nTotal Groups - {total_groups}\n"
+        text += f"Success - {group_success}\nFailed - {group_failed}"
+        
+    return text
+
+@app.on_callback_query(filters.regex(r"^bc_"))
+async def broadcast_callback(client, callback_query):
+    if callback_query.message.chat.id != Config.ADMIN_GROUP:
+        return await callback_query.answer("Unauthorized", show_alert=True)
+        
+    uid = callback_query.from_user.id
+    is_admin = False
+    if uid in Config.OWNER_IDS:
+        is_admin = True
+    else:
+        try:
+            member = await client.get_chat_member(callback_query.message.chat.id, uid)
+            if member.status in [enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER]:
+                is_admin = True
+        except:
+            pass
+            
+    if not is_admin:
+        return await callback_query.answer("Unauthorized", show_alert=True)
+
+    target = callback_query.data
+    
+    if target == "bc_cancel":
+        try:
+            await callback_query.message.edit_text("Broadcast Cancelled...")
+        except: pass
+        return await callback_query.answer()
+        
+    button_texts = {
+        "bc_all": "All Users",
+        "bc_buyers": "All Buyers",
+        "bc_buyers_groups": "Only Buyers & Groups",
+        "bc_all_groups": "All Users & Groups"
+    }
+    btn_text = button_texts.get(target, "Unknown")
+    
+    msg_to_copy = callback_query.message.reply_to_message
+    if not msg_to_copy:
+        return await callback_query.answer("Message not found!", show_alert=True)
+        
+    await callback_query.message.edit_text(f"Broadcasting...\n{btn_text}\n\nPreparing...")
+    await callback_query.answer()
+    
+    user_ids = []
+    group_ids = []
+    
+    if target == "bc_all":
+        user_ids = db.get_all_user_ids()
+    elif target == "bc_buyers":
+        user_ids = db.get_all_buyer_ids()
+    elif target == "bc_buyers_groups":
+        user_ids = db.get_all_buyer_ids()
+        group_ids = db.get_all_buyer_group_ids()
+    elif target == "bc_all_groups":
+        user_ids = db.get_all_user_ids()
+        group_ids = db.get_all_buyer_group_ids()
+        
+    total_users = len(user_ids)
+    total_groups = len(group_ids)
+    
+    user_success = 0
+    user_failed = 0
+    group_success = 0
+    group_failed = 0
+    
+    # Broadcast to users
+    for user_id in user_ids:
+        try:
+            await msg_to_copy.copy(user_id)
+            user_success += 1
+        except Exception:
+            user_failed += 1
+            
+        if (user_success + user_failed) % 20 == 0:
+            text = get_broadcast_text("Broadcasting", target, btn_text, total_users, user_success, user_failed, total_groups, group_success, group_failed)
+            try: await callback_query.message.edit_text(text)
+            except Exception: pass
+            
+        await asyncio.sleep(0.05)
+        
+    # Broadcast to groups
+    for chat_id in group_ids:
+        try:
+            sent_msg = await msg_to_copy.copy(chat_id)
+            try: await sent_msg.pin(disable_notification=False)
+            except Exception: pass
+            group_success += 1
+        except Exception:
+            group_failed += 1
+            
+        if (group_success + group_failed) % 5 == 0:
+            text = get_broadcast_text("Broadcasting", target, btn_text, total_users, user_success, user_failed, total_groups, group_success, group_failed)
+            try: await callback_query.message.edit_text(text)
+            except Exception: pass
+            
+        await asyncio.sleep(0.05)
+        
+    # Final Update
+    final_text = get_broadcast_text("Broadcast Completed", target, btn_text, total_users, user_success, user_failed, total_groups, group_success, group_failed)
+    try: await callback_query.message.edit_text(final_text)
+    except Exception: pass
 
 async def main():
     await app.start()
