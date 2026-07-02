@@ -2090,6 +2090,12 @@ async def broadcast_callback(client, callback_query):
     msg_to_copy = callback_query.message.reply_to_message
     if not msg_to_copy:
         return await callback_query.answer("Message not found!", show_alert=True)
+    
+    # The bot's "Select where..." message is a reply to /broadcast command.
+    # /broadcast command itself is a reply to the actual content message.
+    # So we need to go one level deeper to get the actual content.
+    if msg_to_copy.reply_to_message:
+        msg_to_copy = msg_to_copy.reply_to_message
         
     await callback_query.message.edit_text(f"Broadcasting...\n{btn_text}\n\nPreparing...")
     await callback_query.answer()
@@ -2116,13 +2122,27 @@ async def broadcast_callback(client, callback_query):
     group_success = 0
     group_failed = 0
     
+    # Tracking for JSON report
+    user_success_list = []
+    user_failed_list = []
+    group_success_list = []
+    group_failed_list = []
+    
     # Broadcast to users
     for user_id in user_ids:
+        # Get user info from DB
+        db.cursor.execute('SELECT first_name, username FROM users WHERE user_id = ?', (user_id,))
+        row = db.cursor.fetchone()
+        u_name = row[0] if row else "Unknown"
+        u_username = row[1] if row else None
+        
         try:
             await msg_to_copy.copy(user_id)
             user_success += 1
-        except Exception:
+            user_success_list.append({"user_id": user_id, "name": u_name, "username": u_username})
+        except Exception as e:
             user_failed += 1
+            user_failed_list.append({"user_id": user_id, "name": u_name, "username": u_username, "error": str(e)[:100]})
             
         if (user_success + user_failed) % 20 == 0:
             text = get_broadcast_text("Broadcasting", target, btn_text, total_users, user_success, user_failed, total_groups, group_success, group_failed)
@@ -2132,14 +2152,23 @@ async def broadcast_callback(client, callback_query):
         await asyncio.sleep(0.05)
         
     # Broadcast to groups
+    # Get group info from DB
+    all_groups_info = db.get_all_buyer_groups()
+    
     for chat_id in group_ids:
+        g_info = all_groups_info.get(chat_id, {})
+        g_title = g_info.get("title", "Unknown")
+        g_username = g_info.get("username", None)
+        
         try:
             sent_msg = await msg_to_copy.copy(chat_id)
             try: await sent_msg.pin(disable_notification=False)
             except Exception: pass
             group_success += 1
-        except Exception:
+            group_success_list.append({"chat_id": chat_id, "title": g_title, "username": g_username})
+        except Exception as e:
             group_failed += 1
+            group_failed_list.append({"chat_id": chat_id, "title": g_title, "username": g_username, "error": str(e)[:100]})
             
         if (group_success + group_failed) % 5 == 0:
             text = get_broadcast_text("Broadcasting", target, btn_text, total_users, user_success, user_failed, total_groups, group_success, group_failed)
@@ -2152,6 +2181,35 @@ async def broadcast_callback(client, callback_query):
     final_text = get_broadcast_text("Broadcast Completed", target, btn_text, total_users, user_success, user_failed, total_groups, group_success, group_failed)
     try: await callback_query.message.edit_text(final_text)
     except Exception: pass
+    
+    # Generate and send broadcast.json report
+    try:
+        import json
+        report = {
+            "broadcast_type": btn_text,
+            "timestamp": datetime.now().strftime("%d-%m-%Y %I:%M:%S %p"),
+            "users": {
+                "total": total_users,
+                "success_count": user_success,
+                "failed_count": user_failed,
+                "success": user_success_list,
+                "failed": user_failed_list
+            },
+            "groups": {
+                "total": total_groups,
+                "success_count": group_success,
+                "failed_count": group_failed,
+                "success": group_success_list,
+                "failed": group_failed_list
+            }
+        }
+        with open("broadcast.json", "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=4, ensure_ascii=False)
+        await client.send_document(Config.ADMIN_GROUP, "broadcast.json", caption="Broadcast Report...")
+        if os.path.exists("broadcast.json"):
+            os.remove("broadcast.json")
+    except Exception as e:
+        logger.error(f"Broadcast report error: {e}")
 
 async def main():
     await app.start()
