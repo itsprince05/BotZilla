@@ -752,7 +752,7 @@ async def download_avatar_bg(uid, client):
 async def start(client, message):
     if message.chat.id == Config.ADMIN_GROUP:
         return await message.reply(
-            "BotZilla Downloader\n\n"
+            "Rio Rio Downloader\n\n"
             "For Admins...\n"
             "/dashboard Dashboard URL\n"
             "/broadcast Send Message\n"
@@ -2127,6 +2127,7 @@ async def broadcast_callback(client, callback_query):
     user_failed_list = []
     group_success_list = []
     group_failed_list = []
+    last_update = time.time()
     
     # Broadcast to users
     for user_id in user_ids:
@@ -2144,10 +2145,11 @@ async def broadcast_callback(client, callback_query):
             user_failed += 1
             user_failed_list.append({"user_id": user_id, "name": u_name, "username": u_username, "error": str(e)[:100]})
             
-        if (user_success + user_failed) % 20 == 0:
+        if time.time() - last_update >= 3 or (user_success + user_failed) == total_users:
             text = get_broadcast_text("Broadcasting", target, btn_text, total_users, user_success, user_failed, total_groups, group_success, group_failed)
             try: await callback_query.message.edit_text(text)
             except Exception: pass
+            last_update = time.time()
             
         await asyncio.sleep(0.05)
         
@@ -2170,10 +2172,11 @@ async def broadcast_callback(client, callback_query):
             group_failed += 1
             group_failed_list.append({"chat_id": chat_id, "title": g_title, "username": g_username, "error": str(e)[:100]})
             
-        if (group_success + group_failed) % 5 == 0:
+        if time.time() - last_update >= 3 or (group_success + group_failed) == total_groups:
             text = get_broadcast_text("Broadcasting", target, btn_text, total_users, user_success, user_failed, total_groups, group_success, group_failed)
             try: await callback_query.message.edit_text(text)
             except Exception: pass
+            last_update = time.time()
             
         await asyncio.sleep(0.05)
         
