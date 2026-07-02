@@ -177,11 +177,29 @@ class PFMDownloader:
             "authorization": f"Bearer {self.token.get('auth-token', '')}"
         }
         
-        details = await self._make_request(
-            'GET',
-            f'{self.base}/v2/content_api/show.get_details?show_id={show_id}&curr_ptr=0&info_level={info_level}',
-            headers=custom_headers
-        )
+        # Hit the API 5 times concurrently and find the max episodes_count
+        tasks = []
+        for _ in range(5):
+            tasks.append(self._make_request(
+                'GET',
+                f'{self.base}/v2/content_api/show.get_details?show_id={show_id}&curr_ptr=0&info_level={info_level}',
+                headers=custom_headers
+            ))
+        
+        responses = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        max_episodes_count = 0
+        best_details = None
+        
+        for details in responses:
+            if isinstance(details, dict) and details.get("status") == 1:
+                res_list = details.get("result", [])
+                if res_list:
+                    item = res_list[0]
+                    count = item.get("episodes_count", 0)
+                    if count >= max_episodes_count:
+                        max_episodes_count = count
+                        best_details = details
         
         # Grab the HD Image from the old endpoint
         hd_image = None
@@ -196,13 +214,13 @@ class PFMDownloader:
             if stories:
                 hd_image = stories[0].get("image_url")
         
-        if details and details.get("status") == 1:
-            res_list = details.get("result", [])
+        if best_details and best_details.get("status") == 1:
+            res_list = best_details.get("result", [])
             if res_list:
                 item = res_list[0]
                 return {
                     "title": item.get("show_title"),
-                    "total_episodes": item.get("episodes_count"),
+                    "total_episodes": max_episodes_count,
                     "show_id": show_id,
                     "image": hd_image if hd_image else item.get("image_url"),
                     "language": item.get("language", "Unknown").capitalize()
@@ -338,13 +356,14 @@ class PFMDownloader:
             return result
         return None, None
 
-    async def download_episodes(self,show_id,seq,end,output_dir,progress_callback=None,cancel_flag=None,on_complete=None,on_start=None,quality="192", discovery_done=None, info_level='max', process_tracker=None):
+    async def download_episodes(self,show_id,seq,end,output_dir,progress_callback=None,cancel_flag=None,on_complete=None,on_start=None,quality="192", discovery_done=None, info_level='max', process_tracker=None, on_retry=None, on_search=None):
         total_target = end - seq + 1
         files=[]
         self.last_download_error = None
+        abort_reason = None
         
-        # Qualities to try in order
-        qualities = [quality, "128", "64", "32"]
+        # Qualities to try in order (lowest first for faster downloads)
+        qualities = ["32", "64", "128", quality]
         # Remove duplicates and keep order
         qualities = list(dict.fromkeys([q for q in qualities if q]))
         
@@ -353,17 +372,20 @@ class PFMDownloader:
         
         async def worker():
             while True:
-                if cancel_flag and cancel_flag():
-                    break
-                
                 try:
                     item = await asyncio.wait_for(queue.get(), timeout=1.0)
                 except asyncio.TimeoutError:
+                    if cancel_flag and cancel_flag():
+                        break
                     continue
                 
                 if item is None:
                     queue.task_done()
                     break
+                
+                if cancel_flag and cancel_flag():
+                    queue.task_done()
+                    continue
                 
                 seq_num, ep = item
                 try:
@@ -372,13 +394,17 @@ class PFMDownloader:
                         try:
                             if asyncio.iscoroutinefunction(on_start): await on_start(seq_num, raw_name)
                             else: on_start(seq_num, raw_name)
-                        except: pass
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception: pass
                         
-                    name = re.sub(r'[^\w\s\-,.\']', '', raw_name)
+                    name = re.sub(r'[\\/*?\"<>|#@!\[\](){}^~`$%&+=;:]+', '', raw_name)
+                    name = re.sub(r'[_*]+', '', name)
                     name = re.sub(r'\s+', ' ', name).strip()
                     
                     mpd = ep[1]
                     duration = ep[3] if len(ep) > 3 else 0
+                    video_url = ep[4] if len(ep) > 4 else None
                     
                     clean_name = re.sub(r'^(?:(?:Ep|Episode|E|Ch|Chapter|C)[\s\-.:,]*\d+[\s\-.:,]*)+', '', name, flags=re.IGNORECASE).strip()
                     clean_name = re.sub(r'^\d+[\s\-.:,]+', '', clean_name).strip()
@@ -387,13 +413,13 @@ class PFMDownloader:
                     else:
                         filename = f"Ep {seq_num}.m4a"
                     
-                    show_title_cleaned = re.sub(r"[^a-zA-Z0-9 ]", "", self.current_show_title).strip()
+                    show_title_cleaned = re.sub(r'[\\/*?"<>|#@!\[\](){}^~`$%&+=;:_*]+', '', self.current_show_title).strip()
                     show_dir = os.path.join(output_dir, show_title_cleaned)
                     os.makedirs(show_dir, exist_ok=True)
                     m4a = os.path.join(show_dir, filename)
                     
                     if os.path.exists(m4a) and os.path.getsize(m4a) > 10000:
-                        # (Existing ffprobe logic...)
+                        # Already downloaded, get duration
                         dur = 0
                         try:
                             proc = await asyncio.create_subprocess_exec(
@@ -403,7 +429,9 @@ class PFMDownloader:
                             )
                             out, _ = await proc.communicate()
                             dur = int(float(out.decode().strip()))
-                        except:
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception:
                             dur = int(duration) if duration else 0
                         
                         if on_complete:
@@ -411,90 +439,222 @@ class PFMDownloader:
                         files.append((seq_num, m4a, dur))
                     else:
                         download_success = False
-                        # Try each quality
-                        for q in qualities:
+                        
+                        for overall_attempt in range(5):
+                            if cancel_flag and cancel_flag(): break
                             if download_success: break
-                            link = mpd.rsplit("/", 1)[0] + f"/protected_audio_mpd_{q}k.mp4"
                             
-                            for attempt in range(3): # 3 attempts per quality
-                                if cancel_flag and cancel_flag(): break
+                            # Send retry notification (from 2nd attempt onwards)
+                            if overall_attempt > 0 and on_retry:
                                 try:
-                                    _, key = await self.get_keys(mpd, show_id)
-                                    if not key: 
-                                        logger.warning(f"No key for Ep.{seq_num} (Attempt {attempt+1})")
-                                        await asyncio.sleep(2)
-                                        continue
-
-                                    proc = await asyncio.create_subprocess_exec(
-                                        "ffmpeg", "-y", "-loglevel", "error",
-                                        "-decryption_key", key, "-i", link,
-                                        "-map", "0:a:0", "-vn", "-c:a", "copy", m4a
-                                    )
-                                    self.current_processes.append(proc)
-                                    if process_tracker is not None:
-                                        process_tracker.append(proc)
-                                    try:
-                                        await asyncio.wait_for(proc.wait(), timeout=300)
-                                    except:
-                                        try: proc.kill(); await proc.wait()
-                                        except: pass
-                                    finally:
-                                        if proc in self.current_processes:
-                                            self.current_processes.remove(proc)
-                                        if process_tracker is not None and proc in process_tracker:
-                                            process_tracker.remove(proc)
-
-                                    if os.path.exists(m4a) and os.path.getsize(m4a) > 10000:
-                                        dur = 0
-                                        try:
-                                            pr = await asyncio.create_subprocess_exec(
-                                                "ffprobe", "-v", "error", "-show_entries", "format=duration",
-                                                "-of", "default=noprint_wrappers=1:nokey=1", m4a,
-                                                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL
+                                    if asyncio.iscoroutinefunction(on_retry): await on_retry(seq_num, overall_attempt + 1)
+                                    else: on_retry(seq_num, overall_attempt + 1)
+                                except asyncio.CancelledError:
+                                    raise
+                                except Exception: pass
+                            
+                            # --- Type 2: Try video MPD audio (non-DRM, priority 1) ---
+                            if video_url and not download_success:
+                                try:
+                                    session = await self.get_session()
+                                    async with session.get(video_url) as resp:
+                                        if resp.status == 200:
+                                            mpd_text = await resp.text()
+                                            audio_match = re.search(
+                                                r'contentType="audio".*?<BaseURL>([^<]+)</BaseURL>',
+                                                mpd_text, re.DOTALL
                                             )
-                                            out, _ = await pr.communicate()
-                                            dur = int(float(out.decode().strip()))
-                                        except:
-                                            dur = int(duration) if duration else 0
-                                        
-                                        if on_complete:
-                                            await on_complete(seq_num, m4a, dur)
-                                        files.append((seq_num, m4a, dur))
-                                        download_success = True
-                                        logger.info(f"Success Ep.{seq_num} at {q}k")
-                                        break
+                                            if audio_match:
+                                                audio_filename = audio_match.group(1)
+                                                audio_url = video_url.rsplit("/", 1)[0] + "/" + audio_filename
+                                                
+                                                proc = await asyncio.create_subprocess_exec(
+                                                    "ffmpeg", "-y", "-loglevel", "error",
+                                                    "-i", audio_url,
+                                                    "-vn", "-c:a", "copy", m4a
+                                                )
+                                                self.current_processes.append(proc)
+                                                if process_tracker is not None:
+                                                    process_tracker.append(proc)
+                                                try:
+                                                    await asyncio.wait_for(proc.wait(), timeout=300)
+                                                except asyncio.CancelledError:
+                                                    raise
+                                                except Exception:
+                                                    pass
+                                                finally:
+                                                    if proc.returncode is None:
+                                                        try: proc.kill(); await proc.wait()
+                                                        except Exception: pass
+                                                    if proc in self.current_processes:
+                                                        self.current_processes.remove(proc)
+                                                    if process_tracker is not None and proc in process_tracker:
+                                                        process_tracker.remove(proc)
+                                                
+                                                if cancel_flag and cancel_flag():
+                                                    raise asyncio.CancelledError()
+                                                
+                                                if proc.returncode == 0 and os.path.exists(m4a) and os.path.getsize(m4a) > 10000:
+                                                    dur = 0
+                                                    try:
+                                                        pr = await asyncio.create_subprocess_exec(
+                                                            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                                                            "-of", "default=noprint_wrappers=1:nokey=1", m4a,
+                                                            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL
+                                                        )
+                                                        out, _ = await pr.communicate()
+                                                        dur = int(float(out.decode().strip()))
+                                                    except asyncio.CancelledError:
+                                                        raise
+                                                    except Exception:
+                                                        dur = int(duration) if duration else 0
+                                                    
+                                                    if on_complete:
+                                                        await on_complete(seq_num, m4a, dur)
+                                                    files.append((seq_num, m4a, dur))
+                                                    download_success = True
+                                                    logger.info(f"Success Ep.{seq_num} via video MPD audio (attempt {overall_attempt+1})")
+                                                    break
                                 except Exception as e:
                                     self.last_download_error = str(e)
-                                    logger.error(f"Worker Error Ep.{seq_num} (Quality {q}k, Attempt {attempt+1}): {e}")
-                                await asyncio.sleep(1)
+                                    logger.error(f"Type 2 download Ep.{seq_num} (attempt {overall_attempt+1}): {e}")
+                            
+                            # --- Type 1: DRM audio (priority 2) ---
+                            if not download_success:
+                                for q in qualities:
+                                    if download_success: break
+                                    link = mpd.rsplit("/", 1)[0] + f"/protected_audio_mpd_{q}k.mp4"
+                                    try:
+                                        _, key = await self.get_keys(mpd, show_id)
+                                        if not key:
+                                            logger.warning(f"No key for Ep.{seq_num} (attempt {overall_attempt+1})")
+                                            continue
+
+                                        proc = await asyncio.create_subprocess_exec(
+                                            "ffmpeg", "-y", "-loglevel", "error",
+                                            "-decryption_key", key, "-i", link,
+                                            "-map", "0:a:0", "-vn", "-c:a", "copy", m4a
+                                        )
+                                        self.current_processes.append(proc)
+                                        if process_tracker is not None:
+                                            process_tracker.append(proc)
+                                        try:
+                                            await asyncio.wait_for(proc.wait(), timeout=300)
+                                        except asyncio.CancelledError:
+                                            raise
+                                        except Exception:
+                                            pass
+                                        finally:
+                                            if proc.returncode is None:
+                                                try: proc.kill(); await proc.wait()
+                                                except Exception: pass
+                                            if proc in self.current_processes:
+                                                self.current_processes.remove(proc)
+                                            if process_tracker is not None and proc in process_tracker:
+                                                process_tracker.remove(proc)
+
+                                        if cancel_flag and cancel_flag():
+                                            raise asyncio.CancelledError()
+
+                                        if proc.returncode == 0 and os.path.exists(m4a) and os.path.getsize(m4a) > 10000:
+                                            dur = 0
+                                            try:
+                                                pr = await asyncio.create_subprocess_exec(
+                                                    "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                                                    "-of", "default=noprint_wrappers=1:nokey=1", m4a,
+                                                    stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL
+                                                )
+                                                out, _ = await pr.communicate()
+                                                dur = int(float(out.decode().strip()))
+                                            except asyncio.CancelledError:
+                                                raise
+                                            except Exception:
+                                                dur = int(duration) if duration else 0
+                                            
+                                            if on_complete:
+                                                await on_complete(seq_num, m4a, dur)
+                                            files.append((seq_num, m4a, dur))
+                                            download_success = True
+                                            logger.info(f"Success Ep.{seq_num} at {q}k DRM (attempt {overall_attempt+1})")
+                                            break
+                                    except Exception as e:
+                                        self.last_download_error = str(e)
+                                        logger.error(f"DRM Error Ep.{seq_num} ({q}k, attempt {overall_attempt+1}): {e}")
+                            
+                            if not download_success:
+                                await asyncio.sleep(2)
                         
                         if not download_success:
-                            logger.error(f"FAILED Ep.{seq_num} after all qualities and retries.")
+                            logger.error(f"FAILED Ep.{seq_num} after 5 attempts.")
                             if on_complete:
                                 await on_complete(seq_num, None, 0)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    logger.error(f"Worker error for Ep.{seq_num}: {e}")
+                    if on_complete:
+                        try:
+                            if asyncio.iscoroutinefunction(on_complete): await on_complete(seq_num, None, 0, str(e))
+                            else: on_complete(seq_num, None, 0, str(e))
+                        except Exception: pass
                 finally:
                     queue.task_done()
 
         # Start Workers
         num_workers = 1
         workers = [asyncio.create_task(worker()) for _ in range(num_workers)]
+        self.active_workers = workers
         
         self.current_show_title = "PocketFM"
         current_seq = seq
         processed_metadata = set()
+        empty_page_retries = 0
+        api_fail_retries = 0
+        consecutive_api_advances = 0
+        consecutive_empty_batches = 0
 
         while current_seq <= end:
             if cancel_flag and cancel_flag(): break
             
             story_data = await self.get_detail(show_id, current_seq, info_level=info_level)
             if not story_data or story_data.get("status") != 1:
-                current_seq += 1
-                continue
+                api_fail_retries += 1
+                if api_fail_retries < 3:
+                    # Retry same cursor position after a small delay
+                    logger.warning(f"API failed for curr_ptr={current_seq-1} (retry {api_fail_retries}/3)")
+                    await asyncio.sleep(3)
+                    continue
+                else:
+                    # After 3 retries, skip ahead by 1 and reset counter
+                    logger.error(f"API failed 3 times for curr_ptr={current_seq-1}. Advancing cursor.")
+                    api_fail_retries = 0
+                    current_seq += 1
+                    consecutive_api_advances += 1
+                    if consecutive_api_advances >= 3:
+                        logger.info("3 consecutive API advances. Assuming end of show.")
+                        break
+                    continue
+            
+            api_fail_retries = 0  # Reset on success
+            consecutive_api_advances = 0
             
             result = story_data.get("result", {})
             self.current_show_title = result.get("show_title", self.current_show_title)
             stories = result.get("stories", [])
-            if not stories: break
+            
+            if not stories:
+                empty_page_retries += 1
+                if empty_page_retries < 3:
+                    # Could be a temporary API glitch, retry after delay
+                    logger.warning(f"Empty stories at curr_ptr={current_seq-1} (retry {empty_page_retries}/3)")
+                    await asyncio.sleep(2)
+                    continue
+                else:
+                    # 3 consecutive empty results - likely end of show
+                    logger.info(f"Got 3 consecutive empty pages at curr_ptr={current_seq-1}. Assuming end of episodes.")
+                    break
+            
+            empty_page_retries = 0  # Reset on non-empty
             
             mapping = {}
             to_sub_count = 0
@@ -505,14 +665,16 @@ class PFMDownloader:
                     mapping[i.get('seq_number')] = s
                     media = i.get("media_url_enc", "")
                     if media:
-                        info = (i.get("story_title"), media, s, i.get("duration"))
+                        video_url = (i.get("video_info") or {}).get("android", {}).get("video_url")
+                        info = (i.get("story_title"), media, s, i.get("duration"), video_url)
                         await queue.put((s, info))
                         processed_metadata.add(s)
                         if progress_callback:
                             try:
                                 if asyncio.iscoroutinefunction(progress_callback): await progress_callback(s)
                                 else: progress_callback(s)
-                            except: pass
+                            except asyncio.CancelledError: raise
+                            except Exception: pass
                     else:
                         self.story_meta = [i.get('created_by'), show_id, i.get('story_id')]
                         await self.add_story('subscribe_story')
@@ -527,14 +689,16 @@ class PFMDownloader:
                     if s and s not in processed_metadata:
                         media = i.get("media_url_enc", "")
                         if media:
-                            info = (i.get("story_title"), media, s, i.get("duration"))
+                            video_url = (i.get("video_info") or {}).get("android", {}).get("video_url")
+                            info = (i.get("story_title"), media, s, i.get("duration"), video_url)
                             await queue.put((s, info))
                             processed_metadata.add(s)
                             if progress_callback:
                                 try:
                                     if asyncio.iscoroutinefunction(progress_callback): await progress_callback(s)
                                     else: progress_callback(s)
-                                except: pass
+                                except asyncio.CancelledError: raise
+                                except Exception: pass
             
             for mapped_seq, mapped_s in mapping.items():
                 if mapped_s not in processed_metadata:
@@ -544,15 +708,223 @@ class PFMDownloader:
                         try:
                             if asyncio.iscoroutinefunction(progress_callback): await progress_callback(mapped_s)
                             else: progress_callback(mapped_s)
-                        except: pass
+                        except asyncio.CancelledError: raise
+                        except Exception: pass
                     if on_complete:
                         try:
                             if asyncio.iscoroutinefunction(on_complete): await on_complete(mapped_s, None, 0)
                             else: on_complete(mapped_s, None, 0)
-                        except: pass
+                        except asyncio.CancelledError: raise
+                        except Exception: pass
 
-            # Safe increment to cover all indices even if sequence numbers have gaps
-            current_seq += len(stories)
+            # Advance cursor using max natural_sequence_number seen in this batch
+            # This prevents cursor drift when sequence numbers don't align with page offsets
+            max_nat_seq = max((i.get("natural_sequence_number", 0) for i in stories), default=current_seq)
+            cursor_advance = len(stories)
+            seq_advance = max_nat_seq - current_seq + 1
+            # Use whichever advances further to avoid getting stuck or re-fetching
+            current_seq += max(cursor_advance, seq_advance)
+            
+            if not mapping and to_sub_count == 0:
+                consecutive_empty_batches += 1
+                if consecutive_empty_batches >= 3:
+                    logger.info("3 consecutive batches with no new episodes. Assuming end of show.")
+                    break
+            else:
+                consecutive_empty_batches = 0
+
+        # --- Gap-Filling Pass ---
+        # After main pagination, check for any episodes in [seq, end] that were never discovered
+        # and retry fetching them individually
+        if not (cancel_flag and cancel_flag()):
+            missing_episodes = [ep_num for ep_num in range(seq, end + 1) if ep_num not in processed_metadata]
+            if missing_episodes:
+                logger.info(f"Gap-filling: {len(missing_episodes)} episodes missed in main pass. Retrying...")
+                
+                # Process missing episodes in small batches by fetching pages around them
+                gap_cursors_tried = set()
+                gap_consecutive_not_found = 0
+                for miss_seq in missing_episodes:
+                    if cancel_flag and cancel_flag(): break
+                    if miss_seq in processed_metadata: continue  # Could have been found in a previous gap-fill iteration
+                    
+                    # Avoid re-fetching the same cursor position
+                    cursor_pos = miss_seq
+                    if cursor_pos in gap_cursors_tried: continue
+                    gap_cursors_tried.add(cursor_pos)
+                    
+                    story_data = None
+                    
+                    # Notify UI: searching for this episode
+                    if on_search:
+                        try:
+                            if asyncio.iscoroutinefunction(on_search): await on_search(miss_seq, "searching")
+                            else: on_search(miss_seq, "searching")
+                        except asyncio.CancelledError: raise
+                        except Exception: pass
+                    
+                    found_in_retry = False
+                    for retry_num in range(5):
+                        if cancel_flag and cancel_flag(): break
+                        story_data = await self.get_detail(show_id, cursor_pos, info_level=info_level)
+                        if story_data and story_data.get("status") == 1:
+                            result = story_data.get("result", {})
+                            stories = result.get("stories", [])
+                            for i in stories:
+                                if i.get("natural_sequence_number", 0) == miss_seq:
+                                    found_in_retry = True
+                                    break
+                            if found_in_retry:
+                                break
+                        await asyncio.sleep(1)
+                    
+                    if not found_in_retry:
+                        # Notify UI: episode not found after 5 retries
+                        if on_search:
+                            try:
+                                if asyncio.iscoroutinefunction(on_search): await on_search(miss_seq, "not_found")
+                                else: on_search(miss_seq, "not_found")
+                            except asyncio.CancelledError: raise
+                            except Exception: pass
+                        
+                        # Count as failed
+                        processed_metadata.add(miss_seq)
+                        if on_complete:
+                            try:
+                                if asyncio.iscoroutinefunction(on_complete): await on_complete(miss_seq, None, 0, "not_found")
+                                else: on_complete(miss_seq, None, 0, "not_found")
+                            except asyncio.CancelledError: raise
+                            except Exception: pass
+                        
+                        # Track consecutive not-found for early abort
+                        gap_consecutive_not_found += 1
+                        if gap_consecutive_not_found >= 3:
+                            abort_reason = "many_not_found"
+                            logger.error(f"3 consecutive episodes not found in gap-fill. Aborting for show {show_id}.")
+                            break
+                        continue
+                    
+                    # Found — reset consecutive counter
+                    gap_consecutive_not_found = 0
+                    
+                    if not story_data or story_data.get("status") != 1:
+                        continue
+                    
+                    result = story_data.get("result", {})
+                    stories = result.get("stories", [])
+                    if not stories: continue
+                    
+                    gap_sub_count = 0
+                    gap_mapping = {}
+                    
+                    # Notify UI: episode found
+                    if on_search:
+                        try:
+                            if asyncio.iscoroutinefunction(on_search): await on_search(miss_seq, "found")
+                            else: on_search(miss_seq, "found")
+                        except asyncio.CancelledError: raise
+                        except Exception: pass
+                    
+                    for i in stories:
+                        s = i.get("natural_sequence_number", 0)
+                        # Mark this cursor position as tried for all episodes in this page
+                        gap_cursors_tried.add(s)
+                        if seq <= s <= end and s not in processed_metadata:
+                            gap_mapping[i.get('seq_number')] = s
+                            media = i.get("media_url_enc", "")
+                            if media:
+                                video_url = (i.get("video_info") or {}).get("android", {}).get("video_url")
+                                info = (i.get("story_title"), media, s, i.get("duration"), video_url)
+                                await queue.put((s, info))
+                                processed_metadata.add(s)
+                                if progress_callback:
+                                    try:
+                                        if asyncio.iscoroutinefunction(progress_callback): await progress_callback(s)
+                                        else: progress_callback(s)
+                                    except asyncio.CancelledError: raise
+                                    except Exception: pass
+                            else:
+                                self.story_meta = [i.get('created_by'), show_id, i.get('story_id')]
+                                await self.add_story('subscribe_story')
+                                gap_sub_count += 1
+                    
+                    if gap_sub_count > 0:
+                        await asyncio.sleep(2)
+                        saved_data = await self.get_story(show_id)
+                        saved_stories = (saved_data.get("result", {}) if saved_data else {}).get("stories", [])
+                        for i in saved_stories:
+                            s = gap_mapping.get(i.get('seq_number'))
+                            if s and s not in processed_metadata:
+                                media = i.get("media_url_enc", "")
+                                if media:
+                                    video_url = (i.get("video_info") or {}).get("android", {}).get("video_url")
+                                    info = (i.get("story_title"), media, s, i.get("duration"), video_url)
+                                    await queue.put((s, info))
+                                    processed_metadata.add(s)
+                                    if progress_callback:
+                                        try:
+                                            if asyncio.iscoroutinefunction(progress_callback): await progress_callback(s)
+                                            else: progress_callback(s)
+                                        except asyncio.CancelledError: raise
+                                        except Exception: pass
+                    
+                    for mapped_seq, mapped_s in gap_mapping.items():
+                        if mapped_s not in processed_metadata:
+                            logger.warning(f"Gap-fill: Ep.{mapped_s} still missing after retry.")
+                            processed_metadata.add(mapped_s)
+                            if progress_callback:
+                                try:
+                                    if asyncio.iscoroutinefunction(progress_callback): await progress_callback(mapped_s)
+                                    else: progress_callback(mapped_s)
+                                except asyncio.CancelledError: raise
+                                except Exception: pass
+                            if on_complete:
+                                try:
+                                    if asyncio.iscoroutinefunction(on_complete): await on_complete(mapped_s, None, 0)
+                                    else: on_complete(mapped_s, None, 0)
+                                except asyncio.CancelledError: raise
+                                except Exception: pass
+                
+                still_missing = [ep_num for ep_num in range(seq, end + 1) if ep_num not in processed_metadata]
+                if still_missing:
+                    logger.warning(f"After gap-fill, {len(still_missing)} episodes still missing: {still_missing[:20]}...")
+                    
+                    # Send "Episode n not found..." for each missing episode
+                    # Track consecutive not-found for abort
+                    consecutive_not_found = 0
+                    for miss_ep in sorted(still_missing):
+                        if cancel_flag and cancel_flag(): break
+                        
+                        consecutive_not_found += 1
+                        processed_metadata.add(miss_ep)
+                        
+                        if on_complete:
+                            try:
+                                if asyncio.iscoroutinefunction(on_complete): await on_complete(miss_ep, None, 0, "not_found")
+                                else: on_complete(miss_ep, None, 0, "not_found")
+                            except asyncio.CancelledError: raise
+                            except Exception: pass
+                        
+                        # Check if 3 consecutive episodes are not found
+                        if consecutive_not_found >= 3:
+                            abort_reason = "many_not_found"
+                            logger.error(f"3 consecutive episodes not found. Aborting download for show {show_id}.")
+                            # Fail the rest of the missing episodes so they are accurately counted
+                            idx = sorted(still_missing).index(miss_ep)
+                            for remaining_ep in sorted(still_missing)[idx+1:]:
+                                processed_metadata.add(remaining_ep)
+                                if on_complete:
+                                    try:
+                                        if asyncio.iscoroutinefunction(on_complete): await on_complete(remaining_ep, None, 0, "not_found")
+                                        else: on_complete(remaining_ep, None, 0, "not_found")
+                                    except Exception: pass
+                            break
+                        
+                        # Reset consecutive counter if there's a found episode between missing ones
+                        # (check if the next expected episode was already processed)
+                        next_ep = miss_ep + 1
+                        if next_ep in processed_metadata and next_ep not in still_missing:
+                            consecutive_not_found = 0
 
         # Signal that metadata discovery is complete
         if discovery_done:
@@ -564,6 +936,5 @@ class PFMDownloader:
         
         await asyncio.gather(*workers)
         files.sort(key=lambda x: x[0])
-        return {"success": len(files) > 0, "files": files, "total": total_target}
-        return {"success": len(files) > 0, "files": files, "total": total_target}
+        return {"success": len(files) > 0, "files": files, "total": total_target, "abort_reason": abort_reason}
 
